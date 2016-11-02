@@ -176,6 +176,6 @@ class DHP_PE_RA_FDM {
         DumpSync
     };
 
-    static const bool debug = true;
+    static const bool debug = false;
     string debug_fname;
 };

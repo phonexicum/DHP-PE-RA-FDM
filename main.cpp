@@ -39,7 +39,7 @@ class DHP_PE_RA_FDM_superprac : public DHP_PE_RA_FDM {
         public:
 
     DHP_PE_RA_FDM_superprac(const uint grid_size_, const double eps_):
-        DHP_PE_RA_FDM(0, 0, 3, 3, grid_size_, eps_, 2000) {}
+        DHP_PE_RA_FDM(0, 0, 3, 3, grid_size_, eps_, 1) {}
 
     void Print_p (const string& dout_name, const ProcParams& procParams, const uint x_proc_num, const uint y_proc_num) const;
 
@@ -124,8 +124,6 @@ int main (int argc, char** argv){
     catch (exception& e) {
         cout << e.what() << endl;
     }
-
-    sleep(1);
 
     // ========================
     MPI_Finalize(); // Stop MPI

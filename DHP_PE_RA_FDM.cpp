@@ -8,13 +8,10 @@
 
 #include <mpi.h>
 
-#include <unistd.h> // sleep
-
 
 #include "DHP_PE_RA_FDM.h"
 
 
-using std::cin;
 using std::cout;
 using std::fstream;
 using std::endl;
@@ -409,8 +406,8 @@ void DHP_PE_RA_FDM::Counting_5_star (const double* const f, double* const delta_
     // left -> right
     // ================================
 
-    for (i = 0; i < procCoords.y_cells_num; i++){
-        send_message[i] = p[ (i+1) * procCoords.x_cells_num -1];
+    for (j = 0; j < procCoords.y_cells_num; j++){
+        send_message[j] = f[ (j+1) * procCoords.x_cells_num -1];
     }
 
     if (not procCoords.right){
@@ -490,8 +487,8 @@ void DHP_PE_RA_FDM::Counting_5_star (const double* const f, double* const delta_
     // right -> left
     // ================================
 
-    for (i = 0; i < procCoords.y_cells_num; i++){
-        send_message[i] = p[ i * procCoords.x_cells_num + 0];
+    for (j = 0; j < procCoords.y_cells_num; j++){
+        send_message[j] = f[ j * procCoords.x_cells_num + 0];
     }
 
     if (not procCoords.left){
@@ -572,7 +569,7 @@ void DHP_PE_RA_FDM::Counting_5_star (const double* const f, double* const delta_
     // ================================
 
     for (i = 0; i < procCoords.x_cells_num; i++){
-        send_message[i] = p[ (procCoords.y_cell_pos + procCoords.y_cells_num -1) * procCoords.x_cells_num + i];
+        send_message[i] = f[ (procCoords.y_cell_pos + procCoords.y_cells_num -1) * procCoords.x_cells_num + i];
     }
 
     if (not procCoords.bottom){
@@ -653,7 +650,7 @@ void DHP_PE_RA_FDM::Counting_5_star (const double* const f, double* const delta_
     // ================================
 
     for (i = 0; i < procCoords.x_cells_num; i++){
-        send_message[i] = p[i];
+        send_message[i] = f[i];
     }
 
     if (not procCoords.top){
@@ -825,7 +822,8 @@ bool DHP_PE_RA_FDM::stopCriteria (  const double* const f1, const double* const 
         }
         stop = norm < eps;
 
-        cout << "stop= " << stop << " norm= " << norm << " eps= " << eps << endl;
+        if (debug)
+            cout << "stop= " << stop << " norm= " << norm << " eps= " << eps << endl;
     }
 
     ret = MPI_Bcast(
@@ -907,11 +905,6 @@ void DHP_PE_RA_FDM::Dump_func(const string& fout_name, const ProcParams& procPar
                 MPI_MessageTypes::DumpSync, // int tag
                 procParams.comm             // MPI_Comm comm
             );
-        }
-
-        if (procParams.rank == 0){
-            string fiction;
-            // cin >> fiction;
         }
 
         MPI_Barrier (procParams.comm);

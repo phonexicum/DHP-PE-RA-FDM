@@ -16,12 +16,13 @@ set grid back lt 0 linewidth 0.500, lt 0 linewidth 0.500
 
 set pm3d implicit at s
 set pm3d scansforward
-set pm3d interpolate 20,20 flush begin ftriangles noborder corners2color mean
-#set pm3d interpolate 10,10 flush begin ftriangles noborder corners2color mean
+#set pm3d interpolate 20,20 flush begin ftriangles noborder corners2color mean
+#set pm3d interpolate 5,5 flush begin ftriangles noborder corners2color mean
 
 set pal maxcolors 0
 set palette defined
 
-splot "output.dat" title '' ls 1, "output.dat" title '' with lines ls 1
+splot "output.dat" title '' ls 1
+#splot "output.dat" title '' ls 1, "output.dat" title '' with lines ls 1
 
 pause mouse button3

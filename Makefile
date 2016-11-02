@@ -4,7 +4,12 @@ superPrac2: main.cpp DHP_PE_RA_FDM.cpp DHP_PE_RA_FDM.h
 .PHONY: clean
 
 run:
-	mpirun -np 2 ./superPrac2 2 1.0 output
+	mkdir -p output
+	mpirun -np 4 ./superPrac2 50 0.1 output
+
+graph:
+	./generate_gnuplot.py output
+	./gnuplot.script
 
 clean:
 	rm -f -R superPrac2 output*
