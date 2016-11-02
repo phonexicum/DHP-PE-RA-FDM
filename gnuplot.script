@@ -1,0 +1,27 @@
+#! /usr/bin/gnuplot
+
+set style line 1 lt 1 lw 1 lc rgb '#ff0000' pt -1
+
+set terminal wxt size 1600,900 font ',14'
+#set terminal wxt size 1000,600 font ',14'
+set view 65,17
+
+set title '' font ",26"
+set xlabel "x"
+set ylabel "y"
+set zlabel "u(x, y)" offset graph 0,0,0.7
+
+set ticslevel 0
+set grid back lt 0 linewidth 0.500, lt 0 linewidth 0.500
+
+set pm3d implicit at s
+set pm3d scansforward
+set pm3d interpolate 20,20 flush begin ftriangles noborder corners2color mean
+#set pm3d interpolate 10,10 flush begin ftriangles noborder corners2color mean
+
+set pal maxcolors 0
+set palette defined
+
+splot "output.dat" title '' ls 1, "output.dat" title '' with lines ls 1
+
+pause mouse button3
