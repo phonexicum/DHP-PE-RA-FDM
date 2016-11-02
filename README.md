@@ -1,7 +1,6 @@
 # DHP_PE_RA_FDM
 
-DHP_PE_RA_FDM
-: Dirichlet-Problem-Poisson's-Equation-Rectangular-Area-Finite-Difference-Method
+***DHP_PE_RA_FDM*** - Dirichlet-Problem-Poisson's-Equation-Rectangular-Area-Finite-Difference-Method
 
 This algorithm solves the Dirichlet problem for Poisson's equation in rectangular area using "steep descent iterations" for first several iterations and "conjugate gragient iterations" afterwards.
 
@@ -19,13 +18,17 @@ Algorithm parameters:
 - right side of Laplace operator: function 'F'
 - stopping criteria: function 'stopCriteria'
 
-Usage: You have to inherit from class `DHP_PE_RA_FDM` and write realization for algorithm parameters (virtual functions).
+Usage:
 
-Exceptions:
+- you have to inherit from class `DHP_PE_RA_FDM` and write realization for algorithm parameters (virtual functions).
+
+C++ exceptions:
 
 - exception class `DHP_PE_RA_FDM_Exception` is successor of `std::exception`
 
-C++ version: `-std=gnu++98`
+C++ version:
+
+- `-std=gnu++98`
 
 Considered supercomputers:
 
