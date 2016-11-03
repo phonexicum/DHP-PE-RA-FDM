@@ -73,9 +73,7 @@ int main (int argc, char** argv){
     double eps; stringstream(argv[2]) >> eps;
     string fout_name = string(argv[3]);
 
-    // ================================
-    MPI_Init(&argc,&argv); // Start MPI
-    // ================================
+    MPI_Init(&argc,&argv);
 
     try {
         ProcParams procParams (MPI_COMM_WORLD);
@@ -123,12 +121,13 @@ int main (int argc, char** argv){
     }
     catch (exception& e) {
         cout << e.what() << endl;
+
+        // MPI_Abort(MPI_COMM_WORLD, 2);
+        MPI_Finalize();
+        return 1;
     }
 
-    // ========================
-    MPI_Finalize(); // Stop MPI
-    // ========================
-
+    MPI_Finalize();
     return 0;
 }
 

@@ -2,8 +2,8 @@
 
 set style line 1 lt 1 lw 1 lc rgb '#ff0000' pt -1
 
-set terminal wxt size 1600,900 font ',14'
-#set terminal wxt size 1000,600 font ',14'
+#set terminal wxt size 1600,900 font ',14'
+set terminal wxt size 1000,600 font ',14'
 set view 65,17
 
 set title '' font ",26"
@@ -23,6 +23,6 @@ set pal maxcolors 0
 set palette defined
 
 splot "output.dat" title '' ls 1
-#splot "output.dat" title '' ls 1, "output.dat" title '' with lines ls 1
+#splot "output.dat" title '' with lines ls 1
 
 pause mouse button3

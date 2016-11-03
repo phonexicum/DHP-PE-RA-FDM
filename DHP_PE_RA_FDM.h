@@ -164,8 +164,16 @@ class DHP_PE_RA_FDM {
 
     // in spite of the fact that this variables is temporal and used only in Counting_5_star and ComputingScalarProduct functions,
     // they are too oftenly used, to be allocated on each iteration of computing process
-    double* send_message;
-    double* recv_message;
+    double* send_message_lr;
+    double* send_message_rl;
+    double* send_message_td;
+    double* send_message_bu;
+    double* recv_message_lr;
+    double* recv_message_rl;
+    double* recv_message_td;
+    double* recv_message_bu;
+    MPI_Request* recv_reqs_5_star;
+    MPI_Request* send_reqs_5_star;
     double* gather_double_per_process;
 
     enum MPI_MessageTypes {

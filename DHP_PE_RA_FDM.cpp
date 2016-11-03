@@ -79,13 +79,26 @@ iterations_counter (0),
 
 p (nullptr),
 p_prev (nullptr),
-send_message (nullptr),
-recv_message (nullptr),
+
+send_message_lr (nullptr),
+send_message_rl (nullptr),
+send_message_td (nullptr),
+send_message_bu (nullptr),
+recv_message_lr (nullptr),
+recv_message_rl (nullptr),
+recv_message_td (nullptr),
+recv_message_bu (nullptr),
+recv_reqs_5_star (nullptr),
+send_reqs_5_star (nullptr),
 gather_double_per_process (nullptr),
 
 debug_fname (string("debug.txt"))
+
 {
     cout << std::setprecision(std::numeric_limits<double>::max_digits10);
+
+    send_reqs_5_star = new MPI_Request [4];
+    recv_reqs_5_star = new MPI_Request [4];
 
     if (debug){
         int r;
@@ -114,11 +127,35 @@ DHP_PE_RA_FDM::~DHP_PE_RA_FDM (){
     if (p_prev != nullptr){
         delete [] p_prev; p_prev = nullptr;
     }
-    if (send_message != nullptr){
-        delete [] send_message; send_message = nullptr;
+    if (send_message_lr != nullptr){
+    delete [] send_message_lr; send_message_lr = nullptr;
     }
-    if (recv_message != nullptr){
-        delete [] recv_message; recv_message = nullptr;
+    if (send_message_rl != nullptr){
+        delete [] send_message_rl; send_message_rl = nullptr;
+    }
+    if (send_message_td != nullptr){
+        delete [] send_message_td; send_message_td = nullptr;
+    }
+    if (send_message_bu != nullptr){
+        delete [] send_message_bu; send_message_bu = nullptr;
+    }
+    if (recv_message_lr != nullptr){
+        delete [] recv_message_lr; recv_message_lr = nullptr;
+    }
+    if (recv_message_rl != nullptr){
+        delete [] recv_message_rl; recv_message_rl = nullptr;
+    }
+    if (recv_message_td != nullptr){
+        delete [] recv_message_td; recv_message_td = nullptr;
+    }
+    if (recv_message_bu != nullptr){
+        delete [] recv_message_bu; recv_message_bu = nullptr;
+    }
+    if (recv_reqs_5_star != nullptr){
+        delete [] recv_reqs_5_star; recv_reqs_5_star = nullptr;
+    }
+    if (send_reqs_5_star != nullptr){
+        delete [] send_reqs_5_star; send_reqs_5_star = nullptr;
     }
     if (gather_double_per_process != nullptr){
         delete [] gather_double_per_process; gather_double_per_process = nullptr;
@@ -375,6 +412,7 @@ void DHP_PE_RA_FDM::Counting_5_star (const double* const f, double* const delta_
 
     uint i = 0;
     uint j = 0;
+    int ret = MPI_SUCCESS;
 
     for (j = 1; j < procCoords.y_cells_num -1; j++){
         for (i = 1; i < procCoords.x_cells_num -1; i++){
@@ -388,88 +426,211 @@ void DHP_PE_RA_FDM::Counting_5_star (const double* const f, double* const delta_
         }
     }
 
-    if (send_message == nullptr)
-        send_message = new double [max(procCoords.x_cells_num, procCoords.y_cells_num)];
-    if (recv_message == nullptr)
-        recv_message = new double [max(procCoords.x_cells_num, procCoords.y_cells_num)];
+    // ==========================================
+    // memory allocation
+    // ==========================================
 
-    double top_left_left = 0;
-    double top_left_up = 0;
-    double top_right_right = 0;
-    double top_right_up = 0;
-    double bottom_left_left = 0;
-    double bottom_left_down = 0;
-    double bottom_right_right = 0;
-    double bottom_right_down = 0;
+    if (send_message_lr == nullptr)
+        send_message_lr = new double [max(procCoords.x_cells_num, procCoords.y_cells_num)];
+    if (send_message_rl == nullptr)
+        send_message_rl = new double [max(procCoords.x_cells_num, procCoords.y_cells_num)];
+    if (send_message_td == nullptr)
+        send_message_td = new double [max(procCoords.x_cells_num, procCoords.y_cells_num)];
+    if (send_message_bu == nullptr)
+        send_message_bu = new double [max(procCoords.x_cells_num, procCoords.y_cells_num)];
+    if (recv_message_lr == nullptr)
+        recv_message_lr = new double [max(procCoords.x_cells_num, procCoords.y_cells_num)];
+    if (recv_message_rl == nullptr)
+        recv_message_rl = new double [max(procCoords.x_cells_num, procCoords.y_cells_num)];
+    if (recv_message_td == nullptr)
+        recv_message_td = new double [max(procCoords.x_cells_num, procCoords.y_cells_num)];
+    if (recv_message_bu == nullptr)
+        recv_message_bu = new double [max(procCoords.x_cells_num, procCoords.y_cells_num)];
 
-    // ================================
+    // ==========================================
+    // initialize send buffers
+    // ==========================================
+
     // left -> right
-    // ================================
-
     for (j = 0; j < procCoords.y_cells_num; j++){
-        send_message[j] = f[ (j+1) * procCoords.x_cells_num -1];
+        send_message_lr[j] = f[ (j+1) * procCoords.x_cells_num -1];
+    }
+    // right -> left
+    for (j = 0; j < procCoords.y_cells_num; j++){
+        send_message_rl[j] = f[ j * procCoords.x_cells_num + 0];
+    }
+    // top -> down
+    for (i = 0; i < procCoords.x_cells_num; i++){
+        send_message_td[i] = f[ (procCoords.y_cell_pos + procCoords.y_cells_num -1) * procCoords.x_cells_num + i];
+    }
+    // bottom -> up
+    for (i = 0; i < procCoords.x_cells_num; i++){
+        send_message_bu[i] = f[i];
     }
 
+    // ==========================================
+    // send messages
+    // ==========================================
+    int send_amount = 0;
+
+    // left -> right
     if (not procCoords.right){
 
-        int ret = MPI_Ssend(
-            send_message,                    // void* buffer
-            procCoords.y_cells_num,          // int count
-            MPI_DOUBLE,                      // MPI_Datatype datatype
-            procParams.rank +1,              // int dest
-            MPI_MessageTypes::StarLeftRight, // int tag
-            procParams.comm                  // MPI_Comm comm
+        ret = MPI_Isend(
+            send_message_lr,                            // void* buffer
+            procCoords.y_cells_num,                     // int count
+            MPI_DOUBLE,                                 // MPI_Datatype datatype
+            procParams.rank +1,                         // int dest
+            MPI_MessageTypes::StarLeftRight,            // int tag
+            procParams.comm,                            // MPI_Comm comm
+            &(send_reqs_5_star[send_amount])            // MPI_Request *request
         );
+        send_amount++;
 
         if (ret != MPI_SUCCESS) throw DHP_PE_RA_FDM_Exception("Error sending message from left to right.");
     }
+    // right -> left
     if (not procCoords.left){
 
-        MPI_Status status;
-
-        int ret = MPI_Recv(
-            recv_message,                    // void *buf
-            procCoords.y_cells_num,          // int count
-            MPI_DOUBLE,                      // MPI_Datatype datatype
-            procParams.rank -1,              // int source
-            MPI_MessageTypes::StarLeftRight, // int tag
-            procParams.comm,                 // MPI_Comm comm
-            &status                          // MPI_Status *status
+        ret = MPI_Isend(
+            send_message_rl,                            // void* buffer
+            procCoords.y_cells_num,                     // int count
+            MPI_DOUBLE,                                 // MPI_Datatype datatype
+            procParams.rank -1,                         // int dest
+            MPI_MessageTypes::StarRightLeft,            // int tag
+            procParams.comm,                            // MPI_Comm comm
+            &(send_reqs_5_star[send_amount])            // MPI_Request *request
         );
+        send_amount++;
+
+        if (ret != MPI_SUCCESS) throw DHP_PE_RA_FDM_Exception("Error sending message from right to left.");
+    }
+    // top -> down
+    if (not procCoords.bottom){
+
+        ret = MPI_Isend(
+            send_message_td,                            // void* buffer
+            procCoords.x_cells_num,                     // int count
+            MPI_DOUBLE,                                 // MPI_Datatype datatype
+            procParams.rank + procCoords.x_proc_num,    // int dest
+            MPI_MessageTypes::StarTopDown,              // int tag
+            procParams.comm,                            // MPI_Comm comm
+            &(send_reqs_5_star[send_amount])            // MPI_Request *request
+        );
+        send_amount++;
+
+        if (ret != MPI_SUCCESS) throw DHP_PE_RA_FDM_Exception("Error sending message top -> down.");
+    }
+    // bottom -> up
+    if (not procCoords.top){
+
+        ret = MPI_Isend(
+            send_message_bu,                            // void* buffer
+            procCoords.x_cells_num,                     // int count
+            MPI_DOUBLE,                                 // MPI_Datatype datatype
+            procParams.rank - procCoords.x_proc_num,    // int dest
+            MPI_MessageTypes::StarBottomUp,             // int tag
+            procParams.comm,                            // MPI_Comm comm
+            &(send_reqs_5_star[send_amount])            // MPI_Request *request
+        );
+        send_amount++;
+
+        if (ret != MPI_SUCCESS) throw DHP_PE_RA_FDM_Exception("Error sending message bottom -> up.");
+    }
+
+    // ==========================================
+    // receive messages
+    // ==========================================
+
+    int recv_amount = 0;
+
+    // left -> right
+    if (not procCoords.left){
+
+        ret = MPI_Irecv(
+            recv_message_lr,                            // void *buf
+            procCoords.y_cells_num,                     // int count
+            MPI_DOUBLE,                                 // MPI_Datatype datatype
+            procParams.rank -1,                         // int source
+            MPI_MessageTypes::StarLeftRight,            // int tag
+            procParams.comm,                            // MPI_Comm comm
+            &(recv_reqs_5_star[recv_amount])            // MPI_Request *request
+        );
+        recv_amount++;
 
         if (ret != MPI_SUCCESS) throw DHP_PE_RA_FDM_Exception("Error receiving message from left to right.");
     }
+    // right -> left
+    if (not procCoords.right){
 
-    if (not procCoords.left and not procCoords.right){
-
-        MPI_Status status;
-
-        int ret = MPI_Sendrecv(
-            send_message,                       // const void *sendbuf,
-            procCoords.y_cells_num,             // int sendcount,
-            MPI_DOUBLE,                         // MPI_Datatype sendtype,
-            procParams.rank +1,                 // int dest,
-            MPI_MessageTypes::StarLeftRight,    // int sendtag,
-            recv_message,                       // void *recvbuf,
-            procCoords.y_cells_num,             // int recvcount,
-            MPI_DOUBLE,                         // MPI_Datatype recvtype,
-            procParams.rank -1,                 // int source,
-            MPI_MessageTypes::StarLeftRight,    // int recvtag,
-            procParams.comm,                    // MPI_Comm comm,
-            &status                             // MPI_Status *status
+        ret = MPI_Irecv(
+            recv_message_rl,                            // void *buf
+            procCoords.y_cells_num,                     // int count
+            MPI_DOUBLE,                                 // MPI_Datatype datatype
+            procParams.rank +1,                         // int source
+            MPI_MessageTypes::StarRightLeft,            // int tag
+            procParams.comm,                            // MPI_Comm comm
+            &(recv_reqs_5_star[recv_amount])            // MPI_Request *request
         );
+        recv_amount++;
 
-        if (ret != MPI_SUCCESS) throw DHP_PE_RA_FDM_Exception("Error sendrecv message from left to right.");
+        if (ret != MPI_SUCCESS) throw DHP_PE_RA_FDM_Exception("Error receiving message from right to left.");
+    }
+    // top -> down
+    if (not procCoords.top){
+
+        ret = MPI_Irecv(
+            recv_message_td,                            // void *buf
+            procCoords.x_cells_num,                     // int count
+            MPI_DOUBLE,                                 // MPI_Datatype datatype
+            procParams.rank - procCoords.x_proc_num,    // int source
+            MPI_MessageTypes::StarTopDown,              // int tag
+            procParams.comm,                            // MPI_Comm comm
+            &(recv_reqs_5_star[recv_amount])            // MPI_Request *request
+        );
+        recv_amount++;
+
+        if (ret != MPI_SUCCESS) throw DHP_PE_RA_FDM_Exception("Error receiving message top -> down.");
+    }
+    // bottom -> up
+    if (not procCoords.bottom){
+
+        ret = MPI_Irecv(
+            recv_message_bu,                            // void *buf
+            procCoords.x_cells_num,                     // int count
+            MPI_DOUBLE,                                 // MPI_Datatype datatype
+            procParams.rank + procCoords.x_proc_num,    // int source
+            MPI_MessageTypes::StarBottomUp,             // int tag
+            procParams.comm,                            // MPI_Comm comm
+            &(recv_reqs_5_star[recv_amount])            // MPI_Request *request
+        );
+        recv_amount++;
+
+        if (ret != MPI_SUCCESS) throw DHP_PE_RA_FDM_Exception("Error receiving message bottom -> up.");
     }
 
+    // ==========================================
+    // wait receiving all messages
+    // ==========================================
+
+    ret = MPI_Waitall(
+        recv_amount,        // int count,
+        recv_reqs_5_star,   // MPI_Request array_of_requests[],
+        MPI_STATUS_IGNORE   // MPI_Status array_of_statuses[]
+    );
+
+    if (ret != MPI_SUCCESS) throw DHP_PE_RA_FDM_Exception("Error waiting for recv's in Counting_5_star.");
+
+    // ==========================================
+    // process received messages
+    // ==========================================
+
+    // left -> right
     i = 0;
     if (not procCoords.left and not (procCoords.right and i == procCoords.x_cells_num -1)) {
-        top_left_left = recv_message [0];
-        bottom_left_left = recv_message [procCoords.y_cells_num -1];
-
         for (j = 1; j < procCoords.y_cells_num -1; j++){
             delta_f[j * procCoords.x_cells_num + i] = (
-                    (f[j * procCoords.x_cells_num + i  ] - recv_message[j]                  ) / hx -
+                    (f[j * procCoords.x_cells_num + i  ] - recv_message_lr[j]               ) / hx -
                     (f[j * procCoords.x_cells_num + i+1] - f[j * procCoords.x_cells_num + i]) / hx
                 ) / hx + (
                     (f[ j    * procCoords.x_cells_num + i] - f[(j-1) * procCoords.x_cells_num + i]) / hy -
@@ -482,76 +643,13 @@ void DHP_PE_RA_FDM::Counting_5_star (const double* const f, double* const delta_
         }
     }
 
-
-    // ================================
     // right -> left
-    // ================================
-
-    for (j = 0; j < procCoords.y_cells_num; j++){
-        send_message[j] = f[ j * procCoords.x_cells_num + 0];
-    }
-
-    if (not procCoords.left){
-
-        int ret = MPI_Ssend(
-            send_message,                    // void* buffer
-            procCoords.y_cells_num,          // int count
-            MPI_DOUBLE,                      // MPI_Datatype datatype
-            procParams.rank -1,              // int dest
-            MPI_MessageTypes::StarRightLeft, // int tag
-            procParams.comm                  // MPI_Comm comm
-        );
-
-        if (ret != MPI_SUCCESS) throw DHP_PE_RA_FDM_Exception("Error sending message from right to left.");
-    }
-    if (not procCoords.right){
-
-        MPI_Status status;
-
-        int ret = MPI_Recv(
-            recv_message,                    // void *buf
-            procCoords.y_cells_num,          // int count
-            MPI_DOUBLE,                      // MPI_Datatype datatype
-            procParams.rank +1,              // int source
-            MPI_MessageTypes::StarRightLeft, // int tag
-            procParams.comm,                 // MPI_Comm comm
-            &status                          // MPI_Status *status
-        );
-
-        if (ret != MPI_SUCCESS) throw DHP_PE_RA_FDM_Exception("Error receiving message from right to left.");
-    }
-
-    if (not procCoords.left and not procCoords.right){
-
-        MPI_Status status;
-
-        int ret = MPI_Sendrecv(
-            send_message,                       // const void *sendbuf,
-            procCoords.y_cells_num,             // int sendcount,
-            MPI_DOUBLE,                         // MPI_Datatype sendtype,
-            procParams.rank -1,                 // int dest,
-            MPI_MessageTypes::StarRightLeft,    // int sendtag,
-            recv_message,                       // void *recvbuf,
-            procCoords.y_cells_num,             // int recvcount,
-            MPI_DOUBLE,                         // MPI_Datatype recvtype,
-            procParams.rank +1,                 // int source,
-            MPI_MessageTypes::StarRightLeft,    // int recvtag,
-            procParams.comm,                    // MPI_Comm comm,
-            &status                             // MPI_Status *status
-        );
-
-        if (ret != MPI_SUCCESS) throw DHP_PE_RA_FDM_Exception("Error sendrecv message from right to left.");
-    }
-
     i = procCoords.x_cells_num -1;
     if (not procCoords.right and not (procCoords.left and i == 0)) {
-        top_right_right = recv_message [0];
-        bottom_right_right = recv_message [procCoords.y_cells_num -1];
-
         for (j = 1; j < procCoords.y_cells_num -1; j++){
             delta_f[j * procCoords.x_cells_num + i] = (
                     (f[j * procCoords.x_cells_num + i  ] - f[j * procCoords.x_cells_num + i-1]) / hx -
-                    (recv_message[j]                     - f[j * procCoords.x_cells_num + i  ]) / hx
+                    (recv_message_rl[j]                  - f[j * procCoords.x_cells_num + i  ]) / hx
                 ) / hx + (
                     (f[ j    * procCoords.x_cells_num + i] - f[(j-1) * procCoords.x_cells_num + i]) / hy -
                     (f[(j+1) * procCoords.x_cells_num + i] - f[ j    * procCoords.x_cells_num + i]) / hy
@@ -563,78 +661,15 @@ void DHP_PE_RA_FDM::Counting_5_star (const double* const f, double* const delta_
         }
     }
 
-
-    // ================================
     // top -> down
-    // ================================
-
-    for (i = 0; i < procCoords.x_cells_num; i++){
-        send_message[i] = f[ (procCoords.y_cell_pos + procCoords.y_cells_num -1) * procCoords.x_cells_num + i];
-    }
-
-    if (not procCoords.bottom){
-
-        int ret = MPI_Ssend(
-            send_message,                               // void* buffer
-            procCoords.x_cells_num,                     // int count
-            MPI_DOUBLE,                                 // MPI_Datatype datatype
-            procParams.rank + procCoords.x_proc_num,    // int dest
-            MPI_MessageTypes::StarTopDown,              // int tag
-            procParams.comm                             // MPI_Comm comm
-        );
-
-        if (ret != MPI_SUCCESS) throw DHP_PE_RA_FDM_Exception("Error sending message top -> down.");
-    }
-    if (not procCoords.top){
-
-        MPI_Status status;
-
-        int ret = MPI_Recv(
-            recv_message,                                // void *buf
-            procCoords.x_cells_num,                      // int count
-            MPI_DOUBLE,                                  // MPI_Datatype datatype
-            procParams.rank - procCoords.x_proc_num,     // int source
-            MPI_MessageTypes::StarTopDown,               // int tag
-            procParams.comm,                             // MPI_Comm comm
-            &status                                      // MPI_Status *status
-        );
-
-        if (ret != MPI_SUCCESS) throw DHP_PE_RA_FDM_Exception("Error receiving message top -> down.");
-    }
-
-    if (not procCoords.top and not procCoords.bottom){
-
-        MPI_Status status;
-
-        int ret = MPI_Sendrecv(
-            send_message,                               // const void *sendbuf,
-            procCoords.x_cells_num,                     // int sendcount,
-            MPI_DOUBLE,                                 // MPI_Datatype sendtype,
-            procParams.rank + procCoords.x_proc_num,    // int dest,
-            MPI_MessageTypes::StarTopDown,              // int sendtag,
-            recv_message,                               // void *recvbuf,
-            procCoords.x_cells_num,                     // int recvcount,
-            MPI_DOUBLE,                                 // MPI_Datatype recvtype,
-            procParams.rank - procCoords.x_proc_num,    // int source,
-            MPI_MessageTypes::StarTopDown,              // int recvtag,
-            procParams.comm,                            // MPI_Comm comm,
-            &status                                     // MPI_Status *status
-        );
-
-        if (ret != MPI_SUCCESS) throw DHP_PE_RA_FDM_Exception("Error sendrecv message top -> down.");
-    }
-
     j = 0;
     if (not procCoords.top and not (procCoords.bottom and j == procCoords.y_cells_num -1)) {
-        top_left_up = recv_message [0];
-        top_right_up = recv_message [procCoords.x_cells_num -1];
-
         for (i = 1; i < procCoords.x_cells_num -1; i++){
             delta_f[j * procCoords.x_cells_num + i] = (
                     (f[j * procCoords.x_cells_num + i  ] - f[j * procCoords.x_cells_num + i-1]) / hx -
                     (f[j * procCoords.x_cells_num + i+1] - f[j * procCoords.x_cells_num + i  ]) / hx
                 ) / hx + (
-                    (f[ j    * procCoords.x_cells_num + i] - recv_message[i]                  ) / hy -
+                    (f[ j    * procCoords.x_cells_num + i] - recv_message_td[i]               ) / hy -
                     (f[(j+1) * procCoords.x_cells_num + i] - f[j * procCoords.x_cells_num + i]) / hy
                 ) / hy;
         }
@@ -644,79 +679,16 @@ void DHP_PE_RA_FDM::Counting_5_star (const double* const f, double* const delta_
         }
     }
 
-
-    // ================================
     // bottom -> up
-    // ================================
-
-    for (i = 0; i < procCoords.x_cells_num; i++){
-        send_message[i] = f[i];
-    }
-
-    if (not procCoords.top){
-
-        int ret = MPI_Ssend(
-            send_message,                               // void* buffer
-            procCoords.x_cells_num,                     // int count
-            MPI_DOUBLE,                                 // MPI_Datatype datatype
-            procParams.rank - procCoords.x_proc_num,    // int dest
-            MPI_MessageTypes::StarBottomUp,             // int tag
-            procParams.comm                             // MPI_Comm comm
-        );
-
-        if (ret != MPI_SUCCESS) throw DHP_PE_RA_FDM_Exception("Error sending message bottom -> up.");
-    }
-    if (not procCoords.bottom){
-
-        MPI_Status status;
-
-        int ret = MPI_Recv(
-            recv_message,                               // void *buf
-            procCoords.x_cells_num,                     // int count
-            MPI_DOUBLE,                                 // MPI_Datatype datatype
-            procParams.rank + procCoords.x_proc_num,    // int source
-            MPI_MessageTypes::StarBottomUp,             // int tag
-            procParams.comm,                            // MPI_Comm comm
-            &status                                     // MPI_Status *status
-        );
-
-        if (ret != MPI_SUCCESS) throw DHP_PE_RA_FDM_Exception("Error receiving message bottom -> up.");
-    }
-
-    if (not procCoords.top and not procCoords.bottom){
-
-        MPI_Status status;
-
-        int ret = MPI_Sendrecv(
-            send_message,                               // const void *sendbuf,
-            procCoords.x_cells_num,                     // int sendcount,
-            MPI_DOUBLE,                                 // MPI_Datatype sendtype,
-            procParams.rank - procCoords.x_proc_num,    // int dest,
-            MPI_MessageTypes::StarBottomUp,             // int sendtag,
-            recv_message,                               // void *recvbuf,
-            procCoords.x_cells_num,                     // int recvcount,
-            MPI_DOUBLE,                                 // MPI_Datatype recvtype,
-            procParams.rank + procCoords.x_proc_num,    // int source,
-            MPI_MessageTypes::StarBottomUp,             // int recvtag,
-            procParams.comm,                            // MPI_Comm comm,
-            &status                                     // MPI_Status *status
-        );
-
-        if (ret != MPI_SUCCESS) throw DHP_PE_RA_FDM_Exception("Error sendrecv message bottom -> up.");
-    }
-
     j = procCoords.y_cells_num -1;
     if (not procCoords.bottom and not (procCoords.top and j == 0)) {
-        bottom_left_down = recv_message [0];
-        bottom_right_down = recv_message [procCoords.x_cells_num -1];
-
         for (i = 1; i < procCoords.x_cells_num -1; i++){
             delta_f[j * procCoords.x_cells_num + i] = (
                     (f[j * procCoords.x_cells_num + i  ] - f[j * procCoords.x_cells_num + i-1]) / hx -
                     (f[j * procCoords.x_cells_num + i+1] - f[j * procCoords.x_cells_num + i  ]) / hx
                 ) / hx + (
                     (f[ j    * procCoords.x_cells_num + i] - f[(j-1) * procCoords.x_cells_num + i]) / hy -
-                    (recv_message[i]                       - f[ j    * procCoords.x_cells_num + i]) / hy
+                    (recv_message_bu[i]                    - f[ j    * procCoords.x_cells_num + i]) / hy
                 ) / hy;
         }
     } else {
@@ -725,18 +697,18 @@ void DHP_PE_RA_FDM::Counting_5_star (const double* const f, double* const delta_
         }
     }
 
-    // ================================
+    // ==========================================
     // Counting delta_f's corners
-    // ================================    
+    // ==========================================
 
     j = 0;
     i = 0;
     if (not procCoords.top and not procCoords.left) {
         delta_f[j * procCoords.x_cells_num + i] = (
-                (f[j * procCoords.x_cells_num + i  ] - top_left_left                      ) / hx -
+                (f[j * procCoords.x_cells_num + i  ] - recv_message_lr [0] ) / hx -
                 (f[j * procCoords.x_cells_num + i+1] - f[j * procCoords.x_cells_num + i  ]) / hx
             ) / hx + (
-                (f[ j    * procCoords.x_cells_num + i] - top_left_up                          ) / hy -
+                (f[ j    * procCoords.x_cells_num + i] - recv_message_td [0]                  ) / hy -
                 (f[(j+1) * procCoords.x_cells_num + i] - f[ j    * procCoords.x_cells_num + i]) / hy
             ) / hy;
     } else {
@@ -748,9 +720,9 @@ void DHP_PE_RA_FDM::Counting_5_star (const double* const f, double* const delta_
     if (not procCoords.top and not procCoords.right){
         delta_f[j * procCoords.x_cells_num + i] = (
                 (f[j * procCoords.x_cells_num + i  ] - f[j * procCoords.x_cells_num + i-1]) / hx -
-                (top_right_right                     - f[j * procCoords.x_cells_num + i  ]) / hx
+                (recv_message_rl [0]                 - f[j * procCoords.x_cells_num + i  ]) / hx
             ) / hx + (
-                (f[ j    * procCoords.x_cells_num + i] - top_right_up                         ) / hy -
+                (f[ j    * procCoords.x_cells_num + i] - recv_message_td [procCoords.x_cells_num -1] ) / hy -
                 (f[(j+1) * procCoords.x_cells_num + i] - f[ j    * procCoords.x_cells_num + i]) / hy
             ) / hy;
     } else {
@@ -761,11 +733,11 @@ void DHP_PE_RA_FDM::Counting_5_star (const double* const f, double* const delta_
     i = 0;
     if (not procCoords.bottom and not procCoords.left){
         delta_f[j * procCoords.x_cells_num + i] = (
-                (f[j * procCoords.x_cells_num + i  ] - bottom_left_left                   ) / hx -
+                (f[j * procCoords.x_cells_num + i  ] - recv_message_lr[procCoords.y_cells_num -1] ) / hx -
                 (f[j * procCoords.x_cells_num + i+1] - f[j * procCoords.x_cells_num + i  ]) / hx
             ) / hx + (
                 (f[ j    * procCoords.x_cells_num + i] - f[(j-1) * procCoords.x_cells_num + i]) / hy -
-                (bottom_left_down                      - f[ j    * procCoords.x_cells_num + i]) / hy
+                (recv_message_bu [0]                   - f[ j    * procCoords.x_cells_num + i]) / hy
             ) / hy;
     } else {
         delta_f[j * procCoords.x_cells_num + i] = 0;
@@ -776,14 +748,26 @@ void DHP_PE_RA_FDM::Counting_5_star (const double* const f, double* const delta_
     if (not procCoords.bottom and not procCoords.right){
         delta_f[j * procCoords.x_cells_num + i] = (
                 (f[j * procCoords.x_cells_num + i  ] - f[j * procCoords.x_cells_num + i-1]) / hx -
-                (bottom_right_right                  - f[j * procCoords.x_cells_num + i  ]) / hx
+                (recv_message_rl [procCoords.y_cells_num -1] - f[j * procCoords.x_cells_num + i  ]) / hx
             ) / hx + (
                 (f[ j    * procCoords.x_cells_num + i] - f[(j-1) * procCoords.x_cells_num + i]) / hy -
-                (bottom_right_down                     - f[ j    * procCoords.x_cells_num + i]) / hy
+                (recv_message_bu [procCoords.x_cells_num -1] - f[ j    * procCoords.x_cells_num + i]) / hy
             ) / hy;
     } else {
         delta_f[j * procCoords.x_cells_num + i] = 0;
     }
+
+    // ==========================================
+    // wait sending all messages
+    // ==========================================
+
+    ret = MPI_Waitall(
+        send_amount,        // int count,
+        send_reqs_5_star,   // MPI_Request array_of_requests[],
+        MPI_STATUS_IGNORE   // MPI_Status array_of_statuses[]
+    );
+
+    if (ret != MPI_SUCCESS) throw DHP_PE_RA_FDM_Exception("Error waiting for sends after previous Counting_5_star.");
 
 }
 
