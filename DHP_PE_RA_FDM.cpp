@@ -7,6 +7,7 @@
 #include <iomanip>
 
 #include <mpi.h>
+#include <omp.h>
 
 
 #include "DHP_PE_RA_FDM.h"
@@ -164,10 +165,32 @@ DHP_PE_RA_FDM::~DHP_PE_RA_FDM (){
 
 
 // ==================================================================================================================================================
+//                                                                                                                      DHP_PE_RA_FDM::PrepareMPIComm
+// ==================================================================================================================================================
+ProcParams DHP_PE_RA_FDM::PrepareMPIComm (const ProcParams& procParams, const uint x_proc_num, const uint y_proc_num) const{
+
+    if (procParams.size < x_proc_num * y_proc_num)
+        throw DHP_PE_RA_FDM_Exception("Not enough processes for requested computations.");
+
+    MPI_Comm newComm;
+    if (procParams.rank < x_proc_num * y_proc_num){
+        MPI_Comm_split(MPI_COMM_WORLD, 1, procParams.rank, &newComm);
+    } else {
+        MPI_Comm_split(MPI_COMM_WORLD, MPI_UNDEFINED, procParams.rank, &newComm);
+    }
+
+    return ProcParams(newComm);
+}
+
+
+// ==================================================================================================================================================
 //                                                                                                                             DHP_PE_RA_FDM::Compute
 // ==================================================================================================================================================
-void DHP_PE_RA_FDM::Compute (const ProcParams& procParams, const uint x_proc_num, const uint y_proc_num){
+void DHP_PE_RA_FDM::Compute (const ProcParams& procParams_in, const uint x_proc_num, const uint y_proc_num){
 
+    ProcParams procParams = PrepareMPIComm(procParams_in, x_proc_num, y_proc_num);
+    if (procParams.comm == MPI_COMM_NULL)
+        return;
     ProcComputingCoords procCoords (procParams, grid_size, x_proc_num, y_proc_num);
 
     if (p != nullptr)
@@ -343,6 +366,8 @@ void DHP_PE_RA_FDM::Compute (const ProcParams& procParams, const uint x_proc_num
     delete [] delta_p; delta_p = nullptr;
     delete [] delta_g; delta_g = nullptr;
     delete [] delta_r; delta_r = nullptr;
+
+    MPI_Comm_free (&procParams.comm);
 }
 
 // ==================================================================================================================================================

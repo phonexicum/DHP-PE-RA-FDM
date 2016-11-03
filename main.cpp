@@ -9,7 +9,10 @@
 #include <limits>
 #include <iomanip>
 
+
 #include <mpi.h>
+#include <omp.h>
+
 
 #include <sys/time.h> // gettimeofday
 #include <unistd.h> // sleep
@@ -41,7 +44,7 @@ class DHP_PE_RA_FDM_superprac : public DHP_PE_RA_FDM {
     DHP_PE_RA_FDM_superprac(const uint grid_size_, const double eps_):
         DHP_PE_RA_FDM(0, 0, 3, 3, grid_size_, eps_, 1) {}
 
-    void Print_p (const string& dout_name, const ProcParams& procParams, const uint x_proc_num, const uint y_proc_num) const;
+    void Print_p (const string& dout_name, const ProcParams& procParams_in, const uint x_proc_num, const uint y_proc_num) const;
 
         private:
 
@@ -57,7 +60,7 @@ class DHP_PE_RA_FDM_superprac : public DHP_PE_RA_FDM {
 // ==================================================================================================================================================
 // Computing grid fragmentation between processes. I expect specific amount of processes
 // 
-void CoputeGridFragmentation (const ProcParams& procParams, uint& x_proc_num, uint& y_proc_num);
+void ComputeGridFragmentation (const ProcParams& procParams, uint& x_proc_num, uint& y_proc_num);
 
 // ==================================================================================================================================================
 //                                                                                                                                               MAIN
@@ -80,43 +83,34 @@ int main (int argc, char** argv){
 
         uint x_proc_num = 0;
         uint y_proc_num = 0;
-        CoputeGridFragmentation (procParams, x_proc_num, y_proc_num);
+        ComputeGridFragmentation (procParams, x_proc_num, y_proc_num);
 
-        MPI_Comm currentComm;
-        if (procParams.rank < x_proc_num * y_proc_num){
-            MPI_Comm_split(MPI_COMM_WORLD, 1, procParams.rank, &currentComm);
-        } else {
-            MPI_Comm_split(MPI_COMM_WORLD, MPI_UNDEFINED, procParams.rank, &currentComm);
+        if (procParams.rank == 0){
+            #ifdef _OPENMP
+                cout << "OpenMP absent." << endl;
+            #endif
         }
 
-        if (currentComm != MPI_COMM_NULL){
+        DHP_PE_RA_FDM_superprac superPrac_2 (grid_size, eps);
 
-            procParams = ProcParams(currentComm);
+        struct timeval tp;
+        gettimeofday(&tp, NULL);
+        long int start_ms = tp.tv_sec * 1000 + tp.tv_usec / 1000;
 
-            DHP_PE_RA_FDM_superprac superPrac_2 (grid_size, eps);
+        superPrac_2.Compute(procParams, x_proc_num, y_proc_num);
 
-            struct timeval tp;
-            gettimeofday(&tp, NULL);
-            long int start_ms = tp.tv_sec * 1000 + tp.tv_usec / 1000;
+        gettimeofday(&tp, NULL);
+        long int finish_ms = tp.tv_sec * 1000 + tp.tv_usec / 1000;
 
-            superPrac_2.Compute(procParams, x_proc_num, y_proc_num);
-
-            gettimeofday(&tp, NULL);
-            long int finish_ms = tp.tv_sec * 1000 + tp.tv_usec / 1000;
-
-            if (procParams.rank == 0){
-                cout << "output= " << fout_name << endl
-                     << "x_proc_num= " << x_proc_num << endl
-                     << "y_proc_num= " << y_proc_num << endl
-                     << "miliseconds= " << finish_ms - start_ms << endl
-                     << "iterationsCounter= " <<  superPrac_2.getIterationsCounter() << endl;
-            }
-
-            superPrac_2.Print_p(fout_name, procParams, x_proc_num, y_proc_num);
-
+        if (procParams.rank == 0){
+            cout << "output= " << fout_name << endl
+                 << "x_proc_num= " << x_proc_num << endl
+                 << "y_proc_num= " << y_proc_num << endl
+                 << "miliseconds= " << finish_ms - start_ms << endl
+                 << "iterationsCounter= " <<  superPrac_2.getIterationsCounter() << endl;
         }
 
-        MPI_Comm_free (&currentComm);
+        superPrac_2.Print_p(fout_name, procParams, x_proc_num, y_proc_num);
 
     }
     catch (exception& e) {
@@ -157,8 +151,11 @@ double DHP_PE_RA_FDM_superprac::fi (const double x, const double y) const{
 // ==================================================================================================================================================
 //                                                                                                                   DHP_PE_RA_FDM_superprac::Print_p
 // ==================================================================================================================================================
-void DHP_PE_RA_FDM_superprac::Print_p (const string& dout_name, const ProcParams& procParams, const uint x_proc_num, const uint y_proc_num) const{
+void DHP_PE_RA_FDM_superprac::Print_p (const string& dout_name, const ProcParams& procParams_in, const uint x_proc_num, const uint y_proc_num) const{
 
+    ProcParams procParams = PrepareMPIComm(procParams_in, x_proc_num, y_proc_num);
+    if (procParams.comm == MPI_COMM_NULL)
+        return;
     ProcComputingCoords procCoords (procParams, grid_size, x_proc_num, y_proc_num);
 
     fstream fout(string("./") + dout_name + string("/output.txt.") + to_string(procParams.rank), fstream::out);
@@ -196,13 +193,15 @@ void DHP_PE_RA_FDM_superprac::Print_p (const string& dout_name, const ProcParams
 
     fout.close();
     // fclose(fout);
+    
+    MPI_Comm_free (&procParams.comm);
 }
 
 
 // ==================================================================================================================================================
-//                                                                                                                            CoputeGridFragmentation
+//                                                                                                                            ComputeGridFragmentation
 // ==================================================================================================================================================
-void CoputeGridFragmentation (const ProcParams& procParams, uint& x_proc_num, uint& y_proc_num){
+void ComputeGridFragmentation (const ProcParams& procParams, uint& x_proc_num, uint& y_proc_num){
 
     if (procParams.size >= 1024) {
         x_proc_num = 32;

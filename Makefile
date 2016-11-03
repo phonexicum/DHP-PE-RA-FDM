@@ -1,5 +1,5 @@
 superPrac2: main.cpp DHP_PE_RA_FDM.cpp DHP_PE_RA_FDM.h
-	mpicxx -o superPrac2 main.cpp DHP_PE_RA_FDM.cpp DHP_PE_RA_FDM.h -Wall -std=c++11
+	mpicxx -o superPrac2 main.cpp DHP_PE_RA_FDM.cpp DHP_PE_RA_FDM.h -Wall -std=c++11 -fopenmp
 
 .PHONY: clean
 

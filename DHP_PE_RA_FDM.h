@@ -107,7 +107,7 @@ class DHP_PE_RA_FDM {
     //  after-effect: after function finished, each processor will have its own part of solution for target function
     //  solution can be found at 'double* p;'
     //  
-    void Compute (const ProcParams& procParams, const uint x_proc_num, const uint y_proc_num);
+    void Compute (const ProcParams& procParams_in, const uint x_proc_num, const uint y_proc_num);
 
     double* getSolutionPerProcess () const { return p; }
     uint getIterationsCounter () const { return iterations_counter; }
@@ -136,6 +136,7 @@ class DHP_PE_RA_FDM {
     // stopping criteria (must return true/false value for each process)
     virtual bool stopCriteria (const double* const f1, const double* const f2, const ProcParams& procParams, const ProcComputingCoords& procCoords);
 
+    ProcParams PrepareMPIComm (const ProcParams& procParams, const uint x_proc_num, const uint y_proc_num) const;
 
         private:
 
