@@ -87,7 +87,7 @@ int main (int argc, char** argv){
 
         if (procParams.rank == 0){
             #ifdef _OPENMP
-                cout << "OpenMP absent." << endl;
+                cout << "OpenMP max threads= " << omp_get_max_threads() << endl;
             #endif
         }
 

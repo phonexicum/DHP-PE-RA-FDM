@@ -1,11 +1,18 @@
 superPrac2: main.cpp DHP_PE_RA_FDM.cpp DHP_PE_RA_FDM.h
+	mpicxx -o superPrac2 main.cpp DHP_PE_RA_FDM.cpp DHP_PE_RA_FDM.h -Wall -std=c++11
+
+superPrac2-omp: main.cpp DHP_PE_RA_FDM.cpp DHP_PE_RA_FDM.h
 	mpicxx -o superPrac2 main.cpp DHP_PE_RA_FDM.cpp DHP_PE_RA_FDM.h -Wall -std=c++11 -fopenmp
 
 .PHONY: clean
 
 run:
 	mkdir -p output
-	mpirun -np 4 ./superPrac2 50 0.1 output
+	mpirun -np 2 -env OMP_NUM_THREADS=1 ./superPrac2 300 0.0001 output
+
+omprun:
+	mkdir -p output
+	mpirun -np 2 -env OMP_NUM_THREADS=2 ./superPrac2 300 0.0001 output
 
 graph:
 	./generate_gnuplot.py output
@@ -27,6 +34,9 @@ lmount:
 
 jcompile:
 	mpicxx main.cpp DHP_PE_RA_FDM.cpp DHP_PE_RA_FDM.h -o superPrac2 -std=gnu++98 -Wall
+
+jcompile-omp:
+	mpicxx main.cpp DHP_PE_RA_FDM.cpp DHP_PE_RA_FDM.h -o superPrac2 -std=gnu++98 -Wall -fopenmp
 
 lcompile:
 	module add slurm
