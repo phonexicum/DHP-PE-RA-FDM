@@ -37,6 +37,11 @@ Considered supercomputers:
 - Lomonosov
 - Blue Gene/P (g++ -std=gnu++98)
 
+Example:
+
+- example, realized in main benchmark is 2-nd variant in task description in `algorithm.pdf` on page 6
+- for mentioned example etalon graph and computed graph were generated
+
 ## Repository structure
 
 - `Makefile` - contains a lot of instructions for mounting, uploading, compiling, etc. under supercomputers and local machine

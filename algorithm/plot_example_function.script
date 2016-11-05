@@ -1,0 +1,27 @@
+#! /usr/bin/gnuplot
+
+set terminal wxt size 1600,900 font ',14'
+#set terminal wxt size 1000,600 font ',14'
+set view 65,17
+
+set xlabel "x"
+set ylabel "y"
+set zlabel "u(x, y)" offset graph 0,0,0.7
+
+set xrange [0:3]
+set yrange [0:3]
+
+set samples 100
+set isosamples 100
+
+set ticslevel 0
+
+set pm3d implicit at s
+set hidden3d back offset 1 trianglepattern 3 undefined 1 altdiagonal bentover
+
+set pal maxcolors 0
+set palette defined
+
+splot log(1+x*y)
+
+pause mouse button3
