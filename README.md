@@ -41,13 +41,13 @@ Considered supercomputers:
 
 - `Makefile` - contains a lot of instructions for mounting, uploading, compiling, etc. under supercomputers and local machine
 
-- `./main.cpp` - C++ file containing benchmark for PAM algorithm
+- `./main.cpp` - C++ file containing benchmark for algorithm
 - `./DHP_PE_RA_FDM.h` and `./DHP_PE_RA_FDM.cpp` - C++ DHP_PE_RA_FDM realization
 
 - `./generate_gnuplot.py` - generates `./*.dat` files for their plotting
 - `./gnuplot.script` - gnuplot script which generates plots
 
-- `./algorithm.pdf` - problem formulation (*russian only*) (contains calculating formules)
+- `./algorithm/` - problem formulation (*russian only*) (contains calculating formules) and scheme of numerical method
 - `./jcompile/` and `./lcompile/` - directories contain some results of running benchmark under BlueGene/P and Lomonosov supercomputers
 
 ## supercomputer commands
