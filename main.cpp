@@ -185,8 +185,8 @@ void DHP_PE_RA_FDM_superprac::Print_p (const string& dout_name, const ProcParams
 
             fout << "{"
                 << "\"x\":" << std::setprecision(17) << X1 + (procCoords.x_cell_pos + i) * hx
-                << ", \"y\":" << " " << std::setprecision(17) << Y1 + (procCoords.y_cell_pos + j) * hy
-                << ", \"u\":" << " " << std::setprecision(17) << p[j * procCoords.x_cells_num + i];
+                << ",\"y\":" << std::setprecision(17) << Y1 + (procCoords.y_cell_pos + j) * hy
+                << ",\"u\":" << std::setprecision(17) << p[j * procCoords.x_cells_num + i];
             if (i == procCoords.x_cells_num -1 and j == procCoords.y_cells_num -1)
                 fout << "}" << endl;
             else

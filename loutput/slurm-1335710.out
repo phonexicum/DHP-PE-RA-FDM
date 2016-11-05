@@ -1,0 +1,5 @@
+output= output/lom-out-64-2000
+x_proc_num= 8
+y_proc_num= 8
+miliseconds= 40401
+iterationsCounter= 2828

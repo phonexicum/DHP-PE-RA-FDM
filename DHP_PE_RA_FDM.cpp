@@ -455,8 +455,12 @@ double DHP_PE_RA_FDM::ComputingScalarProduct (  const double* const f, const dou
 
     if (procParams.rank == 0){
         scalar_product = 0;
-        for (int i = 0; i < procParams.size; i++){
-            scalar_product += gather_double_per_process[i];
+        #pragma omp parallel
+        {
+            #pragma omp for schedule (static) reduction(+:scalar_product)
+            for (int i = 0; i < procParams.size; i++){
+                scalar_product += gather_double_per_process[i];
+            }
         }
         return scalar_product;
     } else {

@@ -39,9 +39,9 @@ jcompile-omp:
 	mpixlcxx_r main.cpp DHP_PE_RA_FDM.cpp -o superPrac2-omp -qsmp=omp
 
 lcompile:
-	module add slurm
-	module add impi/5.0.1
-	mpicxx main.cpp DHP_PE_RA_FDM.cpp DHP_PE_RA_FDM.h -o superPrac2 -std=c++0x -Wall  -Wno-unknown-pragmas
+	# module add slurm/15.08
+	# module add impi/5.0.1
+	mpicxx main.cpp DHP_PE_RA_FDM.cpp DHP_PE_RA_FDM.h -o superPrac2 -std=c++0x -Wall -Wno-unknown-pragmas
 
 	cp ./superPrac2 ~/_scratch/superPrac2
 
@@ -57,6 +57,9 @@ upload:
 
 
 jprepare:
+	mkdir -p ./output/bgp-out-1-1000
+	mkdir -p ./output/bgp-out-1-2000
+
 	mkdir -p ./output/bgp-out-128-1000
 	mkdir -p ./output/bgp-out-256-1000
 	mkdir -p ./output/bgp-out-512-1000
@@ -74,14 +77,17 @@ jprepare:
 	mkdir -p ./output/bgp-out-512-2000-omp
 
 lprepare:
-	mkdir -p ./_scratch/output-8-1000
-	mkdir -p ./_scratch/output-16-1000
-	mkdir -p ./_scratch/output-32-1000
-	mkdir -p ./_scratch/output-64-1000
-	mkdir -p ./_scratch/output-128-1000
+	mkdir -p ./_scratch/output/lom-out-1-1000
+	mkdir -p ./_scratch/output/lom-out-1-2000
 
-	mkdir -p ./_scratch/output-8-2000
-	mkdir -p ./_scratch/output-16-2000
-	mkdir -p ./_scratch/output-32-2000
-	mkdir -p ./_scratch/output-64-2000
-	mkdir -p ./_scratch/output-128-2000
+	mkdir -p ./_scratch/output/lom-out-8-1000
+	mkdir -p ./_scratch/output/lom-out-16-1000
+	mkdir -p ./_scratch/output/lom-out-32-1000
+	mkdir -p ./_scratch/output/lom-out-64-1000
+	mkdir -p ./_scratch/output/lom-out-128-1000
+
+	mkdir -p ./_scratch/output/lom-out-8-2000
+	mkdir -p ./_scratch/output/lom-out-16-2000
+	mkdir -p ./_scratch/output/lom-out-32-2000
+	mkdir -p ./_scratch/output/lom-out-64-2000
+	mkdir -p ./_scratch/output/lom-out-128-2000

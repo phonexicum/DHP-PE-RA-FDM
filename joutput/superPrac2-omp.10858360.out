@@ -1,0 +1,6 @@
+OpenMP version 200505. Max threads= 3
+output= output/bgp-out-256-2000-omp
+x_proc_num= 16
+y_proc_num= 16
+miliseconds= 17932
+iterationsCounter= 2828

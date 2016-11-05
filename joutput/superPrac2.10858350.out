@@ -1,0 +1,5 @@
+output= output/bgp-out-128-1000
+x_proc_num= 8
+y_proc_num= 16
+miliseconds= 25234
+iterationsCounter= 1416
