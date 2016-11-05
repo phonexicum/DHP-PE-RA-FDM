@@ -11,7 +11,9 @@
 
 
 #include <mpi.h>
+#ifdef _OPENMP
 #include <omp.h>
+#endif
 
 
 #include <sys/time.h> // gettimeofday
@@ -29,7 +31,7 @@ using std::endl;
 using std::fstream;
 using std::stringstream;
 using std::string;
-using std::to_string;
+// using std::to_string;
 
 using std::setprecision;
 using std::numeric_limits;
@@ -41,15 +43,15 @@ class DHP_PE_RA_FDM_superprac : public DHP_PE_RA_FDM {
 
         public:
 
-    DHP_PE_RA_FDM_superprac(const uint grid_size_, const double eps_):
-        DHP_PE_RA_FDM(0, 0, 3, 3, grid_size_, eps_, 1) {}
+    DHP_PE_RA_FDM_superprac(const int grid_size_x, const int grid_size_y, const double eps_):
+        DHP_PE_RA_FDM(0, 0, 3, 3, grid_size_x, grid_size_y, eps_, 1) {}
 
-    void Print_p (const string& dout_name, const ProcParams& procParams_in, const uint x_proc_num, const uint y_proc_num) const;
+    void Print_p (const string& dout_name, const ProcParams& procParams_in, const int x_proc_num, const int y_proc_num) const;
 
         private:
 
-    virtual double F (const double x, const double y) const;
-    virtual double fi (const double x, const double y) const;
+    double F (const double x, const double y) const;
+    double fi (const double x, const double y) const;
 
     // Exact solution
     // DSolveValue[{    Laplasian(u[x,y], {x, y}) = -(x*x + y*y)/((1+x*y)*(1+x*y))    ,    DirichletCondition[ u[x, y] = Piecewise[{{ln(1+x*y) , (y == 0 || y == 3) && ( 0 <= x && x <= 3) || (x == 0 || x == 3) && ( 0 <= y && y <= 3) }}], True];    }, u[x, y], {x, y} \[Element]    Rectangle[{0, 3}, {0, 3}]    ]
@@ -60,7 +62,7 @@ class DHP_PE_RA_FDM_superprac : public DHP_PE_RA_FDM {
 // ==================================================================================================================================================
 // Computing grid fragmentation between processes. I expect specific amount of processes
 // 
-void ComputeGridFragmentation (const ProcParams& procParams, uint& x_proc_num, uint& y_proc_num);
+void ComputeGridFragmentation (const ProcParams& procParams, int& x_proc_num, int& y_proc_num);
 
 // ==================================================================================================================================================
 //                                                                                                                                               MAIN
@@ -72,7 +74,7 @@ int main (int argc, char** argv){
         return 1;
     }
 
-    uint grid_size; stringstream(argv[1]) >> grid_size;
+    int grid_size; stringstream(argv[1]) >> grid_size;
     double eps; stringstream(argv[2]) >> eps;
     string fout_name = string(argv[3]);
 
@@ -81,17 +83,17 @@ int main (int argc, char** argv){
     try {
         ProcParams procParams (MPI_COMM_WORLD);
 
-        uint x_proc_num = 0;
-        uint y_proc_num = 0;
+        int x_proc_num = 0;
+        int y_proc_num = 0;
         ComputeGridFragmentation (procParams, x_proc_num, y_proc_num);
 
         if (procParams.rank == 0){
             #ifdef _OPENMP
-                cout << "OpenMP max threads= " << omp_get_max_threads() << endl;
+                cout << "OpenMP version " << _OPENMP << ". Max threads= " << omp_get_max_threads() << endl;
             #endif
         }
 
-        DHP_PE_RA_FDM_superprac superPrac_2 (grid_size, eps);
+        DHP_PE_RA_FDM_superprac superPrac_2 (grid_size, grid_size, eps);
 
         struct timeval tp;
         gettimeofday(&tp, NULL);
@@ -151,14 +153,18 @@ double DHP_PE_RA_FDM_superprac::fi (const double x, const double y) const{
 // ==================================================================================================================================================
 //                                                                                                                   DHP_PE_RA_FDM_superprac::Print_p
 // ==================================================================================================================================================
-void DHP_PE_RA_FDM_superprac::Print_p (const string& dout_name, const ProcParams& procParams_in, const uint x_proc_num, const uint y_proc_num) const{
+void DHP_PE_RA_FDM_superprac::Print_p (const string& dout_name, const ProcParams& procParams_in, const int x_proc_num, const int y_proc_num) const{
 
-    ProcParams procParams = PrepareMPIComm(procParams_in, x_proc_num, y_proc_num);
-    if (procParams.comm == MPI_COMM_NULL)
+    MPI_Comm algComm = PrepareMPIComm(procParams_in, x_proc_num, y_proc_num);
+    if (algComm == MPI_COMM_NULL)
         return;
-    ProcComputingCoords procCoords (procParams, grid_size, x_proc_num, y_proc_num);
+    ProcParams procParams (algComm);
+    ProcComputingCoords procCoords (procParams, grid_size_x, grid_size_y, x_proc_num, y_proc_num);
 
-    fstream fout(string("./") + dout_name + string("/output.txt.") + to_string(procParams.rank), fstream::out);
+    // fstream fout(string("./") + dout_name + string("/output.txt.") + to_string(procParams.rank), fstream::out);
+    stringstream ss;
+    ss << "./" << dout_name << "/output.txt." << procParams.rank;
+    fstream fout(ss.str().c_str(), fstream::out);
     // FILE* fout = fopen(dout_name.c_str(), "a");
 
     // This will block until file will get free
@@ -171,13 +177,16 @@ void DHP_PE_RA_FDM_superprac::Print_p (const string& dout_name, const ProcParams
     // fprintf(fout, "# x y z\n");
     // fout << "# x y z" << endl;
     fout << "[" << endl;
-    for (uint j = 0; j < procCoords.y_cells_num; j++){
-        for (uint i = 0; i < procCoords.x_cells_num; i++){
+    for (int j = 0; j < procCoords.y_cells_num; j++){
+        for (int i = 0; i < procCoords.x_cells_num; i++){
+
+            // std::numeric_limits<double>::max_digits10 - is a c++11 feature
+            // std::numeric_limits<double>::max_digits10 == 17
 
             fout << "{"
-                << "\"x\":" << std::setprecision(std::numeric_limits<double>::max_digits10) << X1 + (procCoords.x_cell_pos + i) * hx
-                << ", \"y\":" << " " << std::setprecision(std::numeric_limits<double>::max_digits10) << Y1 + (procCoords.y_cell_pos + j) * hy
-                << ", \"u\":" << " " << std::setprecision(std::numeric_limits<double>::max_digits10) << p[j * procCoords.x_cells_num + i];
+                << "\"x\":" << std::setprecision(17) << X1 + (procCoords.x_cell_pos + i) * hx
+                << ", \"y\":" << " " << std::setprecision(17) << Y1 + (procCoords.y_cell_pos + j) * hy
+                << ", \"u\":" << " " << std::setprecision(17) << p[j * procCoords.x_cells_num + i];
             if (i == procCoords.x_cells_num -1 and j == procCoords.y_cells_num -1)
                 fout << "}" << endl;
             else
@@ -201,7 +210,7 @@ void DHP_PE_RA_FDM_superprac::Print_p (const string& dout_name, const ProcParams
 // ==================================================================================================================================================
 //                                                                                                                            ComputeGridFragmentation
 // ==================================================================================================================================================
-void ComputeGridFragmentation (const ProcParams& procParams, uint& x_proc_num, uint& y_proc_num){
+void ComputeGridFragmentation (const ProcParams& procParams, int& x_proc_num, int& y_proc_num){
 
     if (procParams.size >= 1024) {
         x_proc_num = 32;
@@ -215,7 +224,10 @@ void ComputeGridFragmentation (const ProcParams& procParams, uint& x_proc_num, u
     } else if (procParams.size >= 128) {
         x_proc_num = 8;
         y_proc_num = 16;
-    }  else if (procParams.size >= 32) {
+    } else if (procParams.size >= 64) {
+        x_proc_num = 8;
+        y_proc_num = 8;
+    } else if (procParams.size >= 32) {
         x_proc_num = 4;
         y_proc_num = 8;
     } else if (procParams.size >= 16) {

@@ -25,6 +25,8 @@ Usage:
 C++ exceptions:
 
 - exception class `DHP_PE_RA_FDM_Exception` is successor of `std::exception`
+- exception can be thrown by any process
+- exist some warranties that errors concering algorithm (not MPI errors) will result in throwing exception by each involved into computations process (processes with rank [0, x_proc_num * y_proc_num])
 
 C++ version:
 
@@ -52,22 +54,22 @@ Considered supercomputers:
 ### Blue Gene
 
 ```
-mpisubmit.bg -n 128 -m smp -w 00:15:00 -t PREFER_TORUS ./superPrac2 1000 0.0001 output-128-1000
-mpisubmit.bg -n 256 -m smp -w 00:10:00 -t PREFER_TORUS ./superPrac2 1000 0.0001 output-256-1000
-mpisubmit.bg -n 512 -m smp -w 00:05:00 -t PREFER_TORUS ./superPrac2 1000 0.0001 output-512-1000
+mpisubmit.bg -n 128 -m smp -w 00:15:00 -t PREFER_TORUS ./superPrac2 1000 0.0001 output/bgp-out-128-1000
+mpisubmit.bg -n 256 -m smp -w 00:10:00 -t PREFER_TORUS ./superPrac2 1000 0.0001 output/bgp-out-256-1000
+mpisubmit.bg -n 512 -m smp -w 00:05:00 -t PREFER_TORUS ./superPrac2 1000 0.0001 output/bgp-out-512-1000
 
-mpisubmit.bg -n 128 -m smp -w 00:15:00 -t PREFER_TORUS ./superPrac2 2000 0.0001 output-128-2000
-mpisubmit.bg -n 256 -m smp -w 00:10:00 -t PREFER_TORUS ./superPrac2 2000 0.0001 output-256-2000
-mpisubmit.bg -n 512 -m smp -w 00:05:00 -t PREFER_TORUS ./superPrac2 2000 0.0001 output-512-2000
+mpisubmit.bg -n 128 -m smp -w 00:15:00 -t PREFER_TORUS ./superPrac2 2000 0.0001 output/bgp-out-128-2000
+mpisubmit.bg -n 256 -m smp -w 00:10:00 -t PREFER_TORUS ./superPrac2 2000 0.0001 output/bgp-out-256-2000
+mpisubmit.bg -n 512 -m smp -w 00:05:00 -t PREFER_TORUS ./superPrac2 2000 0.0001 output/bgp-out-512-2000
 
 
-mpisubmit.bg -n 128 -m smp -env OMP_NUM_THREADS=3 -w 00:15:00 -t PREFER_TORUS ./superPrac2 1000 0.0001 output-128-1000
-mpisubmit.bg -n 256 -m smp -env OMP_NUM_THREADS=3 -w 00:10:00 -t PREFER_TORUS ./superPrac2 1000 0.0001 output-256-1000
-mpisubmit.bg -n 512 -m smp -env OMP_NUM_THREADS=3 -w 00:05:00 -t PREFER_TORUS ./superPrac2 1000 0.0001 output-512-1000
+mpisubmit.bg -n 128 -m smp -env OMP_NUM_THREADS=3 -w 00:15:00 -t PREFER_TORUS ./superPrac2-omp 1000 0.0001 output/bgp-out-128-1000-omp
+mpisubmit.bg -n 256 -m smp -env OMP_NUM_THREADS=3 -w 00:10:00 -t PREFER_TORUS ./superPrac2-omp 1000 0.0001 output/bgp-out-256-1000-omp
+mpisubmit.bg -n 512 -m smp -env OMP_NUM_THREADS=3 -w 00:05:00 -t PREFER_TORUS ./superPrac2-omp 1000 0.0001 output/bgp-out-512-1000-omp
 
-mpisubmit.bg -n 128 -m smp -env OMP_NUM_THREADS=3 -w 00:15:00 -t PREFER_TORUS ./superPrac2 2000 0.0001 output-128-2000
-mpisubmit.bg -n 256 -m smp -env OMP_NUM_THREADS=3 -w 00:10:00 -t PREFER_TORUS ./superPrac2 2000 0.0001 output-256-2000
-mpisubmit.bg -n 512 -m smp -env OMP_NUM_THREADS=3 -w 00:05:00 -t PREFER_TORUS ./superPrac2 2000 0.0001 output-512-2000
+mpisubmit.bg -n 128 -m smp -env OMP_NUM_THREADS=3 -w 00:15:00 -t PREFER_TORUS ./superPrac2-omp 2000 0.0001 output/bgp-out-128-2000-omp
+mpisubmit.bg -n 256 -m smp -env OMP_NUM_THREADS=3 -w 00:10:00 -t PREFER_TORUS ./superPrac2-omp 2000 0.0001 output/bgp-out-256-2000-omp
+mpisubmit.bg -n 512 -m smp -env OMP_NUM_THREADS=3 -w 00:05:00 -t PREFER_TORUS ./superPrac2-omp 2000 0.0001 output/bgp-out-512-2000-omp
 
 
 mpisubmit.bg -n 1 -m smp -w 02:00:00 -t PREFER_TORUS
