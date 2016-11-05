@@ -48,6 +48,7 @@ Considered supercomputers:
 - `./gnuplot.script` - gnuplot script which generates plots
 
 - `./algorithm.pdf` - problem formulation (*russian only*) (contains calculating formules)
+- `./jcompile/` and `./lcompile/` - directories contain some results of running benchmark under BlueGene/P and Lomonosov supercomputers
 
 ## supercomputer commands
 
