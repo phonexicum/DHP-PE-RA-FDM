@@ -53,7 +53,7 @@ Example:
 - `./gnuplot.script` - gnuplot script which generates plots
 
 - `./algorithm/` - problem formulation (*russian only*) (contains calculating formules) and scheme of numerical method
-- `./jcompile/` and `./lcompile/` - directories contain some results of running benchmark under BlueGene/P and Lomonosov supercomputers
+- `./joutput/` and `./loutput/` - directories contain some results of running benchmark under BlueGene/P and Lomonosov supercomputers
 
 ## supercomputer commands
 
