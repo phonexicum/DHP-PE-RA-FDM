@@ -36,7 +36,7 @@ struct ProcParams {
 
         public:
     
-    ProcParams(MPI_Comm comm_){
+    ProcParams(MPI_Comm comm_ = MPI_COMM_WORLD){
         comm = comm_;
         MPI_Comm_rank (comm, &rank); // get current process id
         MPI_Comm_size (comm, &size); // get number of processes
@@ -64,6 +64,7 @@ struct ProcComputingCoords {
     bool left;
     bool right;
 
+    ProcComputingCoords ();
     ProcComputingCoords (const ProcParams& procParams, const int grid_size_x, const int grid_size_y, const int x_proc_num_, const int y_proc_num_);
 
     void Dump(const string& fout_name) const;
@@ -91,6 +92,7 @@ struct ProcComputingCoords {
 //  exceptions relative to algorithmical problems (not MPI errors) will be thrown by each process)
 // 
 // Dirichlet-Problem-Poisson's-Equation-Rectangular-Area-Finite-Difference-Method
+// 
 class DHP_PE_RA_FDM {
 
         public:
@@ -108,9 +110,10 @@ class DHP_PE_RA_FDM {
 
     double* getSolutionPerProcess () const { return p; }
     int getIterationsCounter () const { return iterations_counter; }
+    ProcParams getProcParams () const { return procParams; }
+    ProcComputingCoords getProcCoords () const { return procCoords; }
 
-    void Dump_func(const string& fout_name, const ProcParams& procParams, const ProcComputingCoords& procCoords,
-        const double* const f = NULL, const string& func_label = string("")) const;
+    void Dump_func(const string& fout_name, const double* const f = NULL, const string& func_label = string("")) const;
 
     const double X1;
     const double Y1;
@@ -132,27 +135,31 @@ class DHP_PE_RA_FDM {
     // boundary conditions
     virtual double fi (const double x, const double y) const = 0;
     // stopping criteria (must return true/false value for each process)
-    virtual bool stopCriteria (const double* const f1, const double* const f2, const ProcParams& procParams, const ProcComputingCoords& procCoords);
+    virtual bool stopCriteria (const double* const f1, const double* const f2);
 
-    MPI_Comm PrepareMPIComm (const ProcParams& procParams, const int x_proc_num, const int y_proc_num) const;
+    MPI_Comm PrepareMPIComm (const ProcParams& procParams_in, const int x_proc_num, const int y_proc_num) const;
 
         private:
 
     // This function computes five-point difference equation for Laplace operator approximation for function f and stores result into delta_f
-    void Counting_5_star (const double* const f, double* const delta_f, const ProcParams& procParams, const ProcComputingCoords& procCoords);
+    void Counting_5_star (const double* const f, double* const delta_f);
 
     // This function computes scalar product of two functions. Scalar product ignores function values on the boundaries
     // 
     //  return value: scalar_product of two functions, if the process rank equals to 0, returns 0 otherwise
     //  
-    double ComputingScalarProduct (const double* const f, const double* const delta_f, const ProcParams& procParams, const ProcComputingCoords& procCoords);
+    double ComputingScalarProduct (const double* const f, const double* const delta_f);
 
     // 
     // return value: broadcasted param gotten from process with rank == 0
     // 
-    double BroadcastParameter (double param, const ProcParams& procParams);
+    double BroadcastParameter (double param);
+
+    void InitializePand_Pprev ();
 
 
+    ProcParams procParams;
+    ProcComputingCoords procCoords;
     int descent_step_iterations;
     int iterations_counter;
 

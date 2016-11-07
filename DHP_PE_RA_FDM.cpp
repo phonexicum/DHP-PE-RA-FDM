@@ -1,6 +1,7 @@
 #include <iostream>
 #include <fstream>
 #include <string>
+#include <cstring>
 
 #include <cmath>
 #include <limits>
@@ -25,6 +26,24 @@ using std::max;
 using std::abs;
 
 using std::swap;
+using std::memset;
+
+// ==================================================================================================================================================
+//                                                                                                                       DHP_PE_RA_FDM::DHP_PE_RA_FDM
+// ==================================================================================================================================================
+ProcComputingCoords::ProcComputingCoords ():
+x_proc_num (0),
+y_proc_num (0),
+x_cells_num (0),
+x_cell_pos (0),
+y_cells_num (0),
+y_cell_pos (0),
+top (false),
+bottom (false),
+left (false),
+right (false)
+{}
+
 
 // ==================================================================================================================================================
 //                                                                                                                       DHP_PE_RA_FDM::DHP_PE_RA_FDM
@@ -63,6 +82,7 @@ ProcComputingCoords::ProcComputingCoords (const ProcParams& procParams, const in
     left = procParams.rank % x_proc_num == 0;
     right = procParams.rank % x_proc_num == x_proc_num -1;
 }
+
 
 // ==================================================================================================================================================
 //                                                                                                                       DHP_PE_RA_FDM::DHP_PE_RA_FDM
@@ -166,26 +186,29 @@ DHP_PE_RA_FDM::~DHP_PE_RA_FDM (){
     if (gather_double_per_process != NULL){
         delete [] gather_double_per_process; gather_double_per_process = NULL;
     }
+    if (procParams.comm != MPI_COMM_WORLD){
+        MPI_Comm_free(&procParams.comm);
+    }
 }
 
 
 // ==================================================================================================================================================
 //                                                                                                                      DHP_PE_RA_FDM::PrepareMPIComm
 // ==================================================================================================================================================
-MPI_Comm DHP_PE_RA_FDM::PrepareMPIComm (const ProcParams& procParams, const int x_proc_num, const int y_proc_num) const{
+MPI_Comm DHP_PE_RA_FDM::PrepareMPIComm(const ProcParams& procParams_in, const int x_proc_num, const int y_proc_num) const{
 
-    if (procParams.size < x_proc_num * y_proc_num)
+    if (procParams_in.size < x_proc_num * y_proc_num)
         throw DHP_PE_RA_FDM_Exception("Not enough processes for requested computations.");
 
-    // cout << procParams.size << " " << grid_size_x << " " << grid_size_y << endl ;
-    if (procParams.size > (grid_size_x+1) * (grid_size_y+1))
+    // cout << procParams_in.size << " " << grid_size_x << " " << grid_size_y << endl ;
+    if (procParams_in.size > (grid_size_x+1) * (grid_size_y+1))
         throw DHP_PE_RA_FDM_Exception("Can not scale computation of matrix to demanded amount of processes (amount of points in region < amount of processes).");
 
     MPI_Comm newComm;
-    if (procParams.rank < x_proc_num * y_proc_num){
-        MPI_Comm_split(MPI_COMM_WORLD, 1, procParams.rank, &newComm);
+    if (procParams_in.rank < x_proc_num * y_proc_num){
+        MPI_Comm_split(MPI_COMM_WORLD, 1, procParams_in.rank, &newComm);
     } else {
-        MPI_Comm_split(MPI_COMM_WORLD, MPI_UNDEFINED, procParams.rank, &newComm);
+        MPI_Comm_split(MPI_COMM_WORLD, MPI_UNDEFINED, procParams_in.rank, &newComm);
     }
 
     return newComm;
@@ -200,8 +223,12 @@ void DHP_PE_RA_FDM::Compute (const ProcParams& procParams_in, const int x_proc_n
     MPI_Comm algComm = PrepareMPIComm(procParams_in, x_proc_num, y_proc_num);
     if (algComm == MPI_COMM_NULL)
         return;
-    ProcParams procParams(algComm);
-    ProcComputingCoords procCoords (procParams, grid_size_x, grid_size_y, x_proc_num, y_proc_num);
+
+    if (procParams.comm != MPI_COMM_WORLD){
+        MPI_Comm_free(&procParams.comm);
+    }
+    procParams = ProcParams(algComm);
+    procCoords = ProcComputingCoords(procParams, grid_size_x, grid_size_y, x_proc_num, y_proc_num);
 
     if (p != NULL)
         delete [] p; p = NULL;
@@ -222,23 +249,53 @@ void DHP_PE_RA_FDM::Compute (const ProcParams& procParams_in, const int x_proc_n
     #pragma omp parallel
     {
         // #pragma omp for schedule (guided) collapse (2)
-        #pragma omp for schedule (guided)
-        for (int j = 0; j < procCoords.y_cells_num; j++){
+
+        // boundary region
+        if (procCoords.top)
+        {
+            #pragma omp for schedule (guided)
             for (int i = 0; i < procCoords.x_cells_num; i++){
-                if ((procCoords.left and i == 0)                            or
-                    (procCoords.right and i == procCoords.x_cells_num -1)   or
-                    (procCoords.top and j == 0)                             or
-                    (procCoords.bottom and j == procCoords.y_cells_num -1)  )
-                {
-                    p_prev[j * procCoords.x_cells_num + i] = fi(X1 + (procCoords.x_cell_pos + i) * hx, Y1 + (procCoords.y_cell_pos + j) * hy);
-                    p[j * procCoords.x_cells_num + i] = fi(X1 + (procCoords.x_cell_pos + i) * hx, Y1 + (procCoords.y_cell_pos + j) * hy);
-                } else {
-                    p_prev[j * procCoords.x_cells_num + i] = 0;
-                }
+                p_prev[0 * procCoords.x_cells_num + i] = fi(X1 + (procCoords.x_cell_pos + i) * hx, Y1 + (procCoords.y_cell_pos + 0) * hy);
+                p[0 * procCoords.x_cells_num + i] = fi(X1 + (procCoords.x_cell_pos + i) * hx, Y1 + (procCoords.y_cell_pos + 0) * hy);
             }
         }
+        if (procCoords.bottom){
+            #pragma omp for schedule (guided)
+            for (int i = 0; i < procCoords.x_cells_num; i++){
+                p_prev[(procCoords.y_cells_num -1) * procCoords.x_cells_num + i] =
+                    fi(X1 + (procCoords.x_cell_pos + i) * hx, Y1 + (procCoords.y_cell_pos + (procCoords.y_cells_num -1)) * hy);
+                p[(procCoords.y_cells_num -1) * procCoords.x_cells_num + i] =
+                    fi(X1 + (procCoords.x_cell_pos + i) * hx, Y1 + (procCoords.y_cell_pos + (procCoords.y_cells_num -1)) * hy);
+            }
+        }
+        if (procCoords.left){
+            #pragma omp for schedule (guided)
+            for (int j = 0; j < procCoords.y_cells_num; j++){
+                p_prev[j * procCoords.x_cells_num + 0] = fi(X1 + (procCoords.x_cell_pos + 0) * hx, Y1 + (procCoords.y_cell_pos + j) * hy);
+                p[j * procCoords.x_cells_num + 0] = fi(X1 + (procCoords.x_cell_pos + 0) * hx, Y1 + (procCoords.y_cell_pos + j) * hy);
+            }
+        }
+        if (procCoords.right){
+            #pragma omp for schedule (guided)
+            for (int j = 0; j < procCoords.y_cells_num; j++){
+                p_prev[j * procCoords.x_cells_num + (procCoords.x_cells_num -1)] =
+                    fi(X1 + (procCoords.x_cell_pos + (procCoords.x_cells_num -1)) * hx, Y1 + (procCoords.y_cell_pos + j) * hy);
+                p[j * procCoords.x_cells_num + (procCoords.x_cells_num -1)] =
+                    fi(X1 + (procCoords.x_cell_pos + (procCoords.x_cells_num -1)) * hx, Y1 + (procCoords.y_cell_pos + j) * hy);
+            }
+        }
+        // internal region
+        #pragma omp for schedule (guided)
+        for (int j = static_cast<int>(procCoords.top); j < procCoords.y_cells_num - static_cast<int>(procCoords.bottom); j++){
+            memset(&(p_prev[j * procCoords.x_cells_num + static_cast<int>(procCoords.left)]), 0,
+                procCoords.x_cells_num - static_cast<int>(procCoords.right) - static_cast<int>(procCoords.left));
+
+            // for (int i = static_cast<int>(procCoords.left); i < procCoords.x_cells_num - static_cast<int>(procCoords.right); i++){
+            //     p_prev[j * procCoords.x_cells_num + i] = 0;
+            // }
+        }
     }
-    Dump_func(debug_fname, procParams, procCoords, p_prev, "p_prev");
+    Dump_func(debug_fname, p_prev, "p_prev");
 
 
     iterations_counter = 0;
@@ -247,8 +304,8 @@ void DHP_PE_RA_FDM::Compute (const ProcParams& procParams_in, const int x_proc_n
             cout << endl << "iterations_counter = " << iterations_counter << endl;
 
         // Computing step 2
-        Counting_5_star (p_prev, delta_p, procParams, procCoords);
-        Dump_func(debug_fname, procParams, procCoords, delta_p, "delta_p");
+        Counting_5_star (p_prev, delta_p);
+        Dump_func(debug_fname, delta_p, "delta_p");
 
         // Computing step 3
         #pragma omp parallel
@@ -272,16 +329,16 @@ void DHP_PE_RA_FDM::Compute (const ProcParams& procParams_in, const int x_proc_n
                 }
             }
         }
-        Dump_func(debug_fname, procParams, procCoords, r, "r");
+        Dump_func(debug_fname, r, "r");
 
         double scalar_product_delta_r_and_g = 1;
         if (iterations_counter >= descent_step_iterations){
             // Computing step 4
-            Counting_5_star (r, delta_r, procParams, procCoords);
-            Dump_func(debug_fname, procParams, procCoords, delta_r, "delta_r");
+            Counting_5_star (r, delta_r);
+            Dump_func(debug_fname, delta_r, "delta_r");
 
             // Computing step 5
-            scalar_product_delta_r_and_g = ComputingScalarProduct(delta_r, g, procParams, procCoords);
+            scalar_product_delta_r_and_g = ComputingScalarProduct(delta_r, g);
             if (debug and procParams.rank == 0)
                 cout << "scalar_product_delta_r_and_g= " << scalar_product_delta_r_and_g << endl;
         }
@@ -292,7 +349,7 @@ void DHP_PE_RA_FDM::Compute (const ProcParams& procParams_in, const int x_proc_n
             if (procParams.rank == 0){
                 alpha_k = scalar_product_delta_r_and_g / scalar_product_delta_g_and_g;
             }
-            alpha_k = BroadcastParameter(alpha_k, procParams);
+            alpha_k = BroadcastParameter(alpha_k);
             if (debug and procParams.rank == 0)
                 cout << "alpha_k= " << alpha_k << endl;
         }
@@ -320,19 +377,19 @@ void DHP_PE_RA_FDM::Compute (const ProcParams& procParams_in, const int x_proc_n
                 }
             }
         }
-        Dump_func(debug_fname, procParams, procCoords, g, "g");
+        Dump_func(debug_fname, g, "g");
 
         // Computing step 8
-        Counting_5_star (g, delta_g, procParams, procCoords);
-        Dump_func(debug_fname, procParams, procCoords, delta_g, "delta_g");
+        Counting_5_star (g, delta_g);
+        Dump_func(debug_fname, delta_g, "delta_g");
 
         // Computing step 9
-        double scalar_product_r_and_g = ComputingScalarProduct(r, g, procParams, procCoords);
+        double scalar_product_r_and_g = ComputingScalarProduct(r, g);
         if (debug and procParams.rank == 0)
             cout << "scalar_product_r_and_g= " << scalar_product_r_and_g << endl;
 
         // Computing step 10
-        scalar_product_delta_g_and_g = ComputingScalarProduct(delta_g, g, procParams, procCoords);
+        scalar_product_delta_g_and_g = ComputingScalarProduct(delta_g, g);
         if (debug and procParams.rank == 0)
             cout << "scalar_product_delta_g_and_g= " << scalar_product_delta_g_and_g << endl;
 
@@ -347,7 +404,7 @@ void DHP_PE_RA_FDM::Compute (const ProcParams& procParams_in, const int x_proc_n
                 tau = -1;
             }
         }
-        tau = BroadcastParameter(tau, procParams);
+        tau = BroadcastParameter(tau);
         if (debug and procParams.rank == 0)
             cout << "tau= " << tau << endl;
 
@@ -382,9 +439,9 @@ void DHP_PE_RA_FDM::Compute (const ProcParams& procParams_in, const int x_proc_n
                 }
             }
         }
-        Dump_func(debug_fname, procParams, procCoords, p, "p");
+        Dump_func(debug_fname, p, "p");
 
-        if (stopCriteria (p, p_prev, procParams, procCoords))
+        if (stopCriteria (p, p_prev))
             break;
 
         swap(p, p_prev);
@@ -396,14 +453,12 @@ void DHP_PE_RA_FDM::Compute (const ProcParams& procParams_in, const int x_proc_n
     delete [] delta_p; delta_p = NULL;
     delete [] delta_g; delta_g = NULL;
     delete [] delta_r; delta_r = NULL;
-
-    MPI_Comm_free (&procParams.comm);
 }
 
 // ==================================================================================================================================================
 //                                                                                                                  DHP_PE_RA_FDM::BroadcastParameter
 // ==================================================================================================================================================
-double DHP_PE_RA_FDM::BroadcastParameter (double param, const ProcParams& procParams){
+double DHP_PE_RA_FDM::BroadcastParameter (double param){
 
     int ret = MPI_Bcast(
         &param,         // void *buffer,
@@ -422,8 +477,7 @@ double DHP_PE_RA_FDM::BroadcastParameter (double param, const ProcParams& procPa
 // ==================================================================================================================================================
 //                                                                                                              DHP_PE_RA_FDM::ComputingScalarProduct
 // ==================================================================================================================================================
-double DHP_PE_RA_FDM::ComputingScalarProduct (  const double* const f, const double* const delta_f,
-                                                const ProcParams& procParams, const ProcComputingCoords& procCoords){
+double DHP_PE_RA_FDM::ComputingScalarProduct(const double* const f, const double* const delta_f){
 
     double scalar_product = 0;
     #pragma omp parallel
@@ -472,7 +526,7 @@ double DHP_PE_RA_FDM::ComputingScalarProduct (  const double* const f, const dou
 // ==================================================================================================================================================
 //                                                                                                                     DHP_PE_RA_FDM::Counting_5_star
 // ==================================================================================================================================================
-void DHP_PE_RA_FDM::Counting_5_star (const double* const f, double* const delta_f, const ProcParams& procParams, const ProcComputingCoords& procCoords){
+void DHP_PE_RA_FDM::Counting_5_star (const double* const f, double* const delta_f){
 
     int i = 0;
     int j = 0;
@@ -1072,8 +1126,7 @@ void DHP_PE_RA_FDM::Counting_5_star (const double* const f, double* const delta_
 // ==================================================================================================================================================
 //                                                                                                                                  DHP_PE_RA_FDM::fi
 // ==================================================================================================================================================
-bool DHP_PE_RA_FDM::stopCriteria (  const double* const f1, const double* const f2,
-                                    const ProcParams& procParams, const ProcComputingCoords& procCoords){
+bool DHP_PE_RA_FDM::stopCriteria(const double* const f1, const double* const f2){
 
     double norm = 0;
     // #pragma omp parallel reduction(max:norm)
@@ -1148,8 +1201,7 @@ bool DHP_PE_RA_FDM::stopCriteria (  const double* const f1, const double* const 
 // ==================================================================================================================================================
 //                                                                                                                                DHP_PE_RA_FDM::Dump
 // ==================================================================================================================================================
-void DHP_PE_RA_FDM::Dump_func(const string& fout_name, const ProcParams& procParams, const ProcComputingCoords& procCoords,
-                         const double* const f, const string& func_label) const{
+void DHP_PE_RA_FDM::Dump_func(const string& fout_name, const double* const f, const string& func_label) const{
 
     if (debug){
 

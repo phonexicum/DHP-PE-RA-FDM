@@ -46,7 +46,7 @@ class DHP_PE_RA_FDM_superprac : public DHP_PE_RA_FDM {
     DHP_PE_RA_FDM_superprac(const int grid_size_x, const int grid_size_y, const double eps_):
         DHP_PE_RA_FDM(0, 0, 3, 3, grid_size_x, grid_size_y, eps_, 1) {}
 
-    void Print_p (const string& dout_name, const ProcParams& procParams_in, const int x_proc_num, const int y_proc_num) const;
+    void Print_p (const string& dout_name) const;
 
         private:
 
@@ -112,7 +112,7 @@ int main (int argc, char** argv){
                  << "iterationsCounter= " <<  superPrac_2.getIterationsCounter() << endl;
         }
 
-        superPrac_2.Print_p(fout_name, procParams, x_proc_num, y_proc_num);
+        superPrac_2.Print_p(fout_name);
 
     }
     catch (exception& e) {
@@ -153,13 +153,10 @@ double DHP_PE_RA_FDM_superprac::fi (const double x, const double y) const{
 // ==================================================================================================================================================
 //                                                                                                                   DHP_PE_RA_FDM_superprac::Print_p
 // ==================================================================================================================================================
-void DHP_PE_RA_FDM_superprac::Print_p (const string& dout_name, const ProcParams& procParams_in, const int x_proc_num, const int y_proc_num) const{
+void DHP_PE_RA_FDM_superprac::Print_p (const string& dout_name) const{
 
-    MPI_Comm algComm = PrepareMPIComm(procParams_in, x_proc_num, y_proc_num);
-    if (algComm == MPI_COMM_NULL)
-        return;
-    ProcParams procParams (algComm);
-    ProcComputingCoords procCoords (procParams, grid_size_x, grid_size_y, x_proc_num, y_proc_num);
+    ProcParams procParams = getProcParams();
+    ProcComputingCoords procCoords = getProcCoords();
 
     // fstream fout(string("./") + dout_name + string("/output.txt.") + to_string(procParams.rank), fstream::out);
     stringstream ss;
@@ -202,8 +199,6 @@ void DHP_PE_RA_FDM_superprac::Print_p (const string& dout_name, const ProcParams
 
     fout.close();
     // fclose(fout);
-    
-    MPI_Comm_free (&procParams.comm);
 }
 
 
