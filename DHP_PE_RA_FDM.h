@@ -155,7 +155,10 @@ class DHP_PE_RA_FDM {
     // 
     double BroadcastParameter (double param);
 
-    void InitializePand_Pprev ();
+    void Initialize_P_and_Pprev ();
+    void Compute_r (const double* const delta_p, double* const r) const;
+    void Compute_g (double* const g, const double* const r, const double alpha) const;
+    void Compute_p (const double tau, const double* const g);
 
 
     ProcParams procParams;

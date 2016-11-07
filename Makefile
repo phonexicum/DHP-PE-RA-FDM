@@ -25,7 +25,7 @@ clean:
 
 jmount:
 	mkdir -p ./mount/
-	sshfs -o nonempty edu-cmc-stud16-621-02@bluegene.hpc.cs.msu.ru:/home/edu-cmc-stud16-621-02 ./mount/
+	sshfs -o nonempty edu-cmc-stud16-621-02@bluegene.hpc.cs.msu.ru:/home/edu-cmc-stud16-621-02/DHP ./mount/
 
 lmount:
 	mkdir -p ./mount/

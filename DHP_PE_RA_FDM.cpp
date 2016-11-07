@@ -246,55 +246,7 @@ void DHP_PE_RA_FDM::Compute (const ProcParams& procParams_in, const int x_proc_n
     double scalar_product_delta_g_and_g = 1;
 
     // Computing step 1
-    #pragma omp parallel
-    {
-        // #pragma omp for schedule (guided) collapse (2)
-
-        // boundary region
-        if (procCoords.top)
-        {
-            #pragma omp for schedule (guided)
-            for (int i = 0; i < procCoords.x_cells_num; i++){
-                p_prev[0 * procCoords.x_cells_num + i] = fi(X1 + (procCoords.x_cell_pos + i) * hx, Y1 + (procCoords.y_cell_pos + 0) * hy);
-                p[0 * procCoords.x_cells_num + i] = fi(X1 + (procCoords.x_cell_pos + i) * hx, Y1 + (procCoords.y_cell_pos + 0) * hy);
-            }
-        }
-        if (procCoords.bottom){
-            #pragma omp for schedule (guided)
-            for (int i = 0; i < procCoords.x_cells_num; i++){
-                p_prev[(procCoords.y_cells_num -1) * procCoords.x_cells_num + i] =
-                    fi(X1 + (procCoords.x_cell_pos + i) * hx, Y1 + (procCoords.y_cell_pos + (procCoords.y_cells_num -1)) * hy);
-                p[(procCoords.y_cells_num -1) * procCoords.x_cells_num + i] =
-                    fi(X1 + (procCoords.x_cell_pos + i) * hx, Y1 + (procCoords.y_cell_pos + (procCoords.y_cells_num -1)) * hy);
-            }
-        }
-        if (procCoords.left){
-            #pragma omp for schedule (guided)
-            for (int j = 0; j < procCoords.y_cells_num; j++){
-                p_prev[j * procCoords.x_cells_num + 0] = fi(X1 + (procCoords.x_cell_pos + 0) * hx, Y1 + (procCoords.y_cell_pos + j) * hy);
-                p[j * procCoords.x_cells_num + 0] = fi(X1 + (procCoords.x_cell_pos + 0) * hx, Y1 + (procCoords.y_cell_pos + j) * hy);
-            }
-        }
-        if (procCoords.right){
-            #pragma omp for schedule (guided)
-            for (int j = 0; j < procCoords.y_cells_num; j++){
-                p_prev[j * procCoords.x_cells_num + (procCoords.x_cells_num -1)] =
-                    fi(X1 + (procCoords.x_cell_pos + (procCoords.x_cells_num -1)) * hx, Y1 + (procCoords.y_cell_pos + j) * hy);
-                p[j * procCoords.x_cells_num + (procCoords.x_cells_num -1)] =
-                    fi(X1 + (procCoords.x_cell_pos + (procCoords.x_cells_num -1)) * hx, Y1 + (procCoords.y_cell_pos + j) * hy);
-            }
-        }
-        // internal region
-        #pragma omp for schedule (guided)
-        for (int j = static_cast<int>(procCoords.top); j < procCoords.y_cells_num - static_cast<int>(procCoords.bottom); j++){
-            memset(&(p_prev[j * procCoords.x_cells_num + static_cast<int>(procCoords.left)]), 0,
-                procCoords.x_cells_num - static_cast<int>(procCoords.right) - static_cast<int>(procCoords.left));
-
-            // for (int i = static_cast<int>(procCoords.left); i < procCoords.x_cells_num - static_cast<int>(procCoords.right); i++){
-            //     p_prev[j * procCoords.x_cells_num + i] = 0;
-            // }
-        }
-    }
+    Initialize_P_and_Pprev();
     Dump_func(debug_fname, p_prev, "p_prev");
 
 
@@ -308,27 +260,7 @@ void DHP_PE_RA_FDM::Compute (const ProcParams& procParams_in, const int x_proc_n
         Dump_func(debug_fname, delta_p, "delta_p");
 
         // Computing step 3
-        #pragma omp parallel
-        {
-            // #pragma omp for schedule (guided) collapse (2)
-            #pragma omp for schedule (guided)
-            for (int j = 0; j < procCoords.y_cells_num; j++){
-                for (int i = 0; i < procCoords.x_cells_num; i++){
-                    if ((procCoords.left and i == 0)                            or
-                        (procCoords.right and i == procCoords.x_cells_num -1)   or
-                        (procCoords.top and j == 0)                             or
-                        (procCoords.bottom and j == procCoords.y_cells_num -1)  )
-                    {
-                        r[j * procCoords.x_cells_num + i] = 0;
-                    } else {
-                        r[j * procCoords.x_cells_num + i] =
-                            delta_p[j * procCoords.x_cells_num + i] -
-                            F(X1 + (procCoords.x_cell_pos + i) * hx, Y1 + (procCoords.y_cell_pos + j) * hy)
-                            ;
-                    }
-                }
-            }
-        }
+        Compute_r (delta_p, r);
         Dump_func(debug_fname, r, "r");
 
         double scalar_product_delta_r_and_g = 1;
@@ -344,39 +276,18 @@ void DHP_PE_RA_FDM::Compute (const ProcParams& procParams_in, const int x_proc_n
         }
 
         // Computing step 6
-        double alpha_k = 0;
+        double alpha = 0;
         if (iterations_counter >= descent_step_iterations){
             if (procParams.rank == 0){
-                alpha_k = scalar_product_delta_r_and_g / scalar_product_delta_g_and_g;
+                alpha = scalar_product_delta_r_and_g / scalar_product_delta_g_and_g;
             }
-            alpha_k = BroadcastParameter(alpha_k);
+            alpha = BroadcastParameter(alpha);
             if (debug and procParams.rank == 0)
-                cout << "alpha_k= " << alpha_k << endl;
+                cout << "alpha= " << alpha << endl;
         }
 
         // Computing step 7
-        #pragma omp parallel
-        {
-            // #pragma omp for schedule (guided) collapse (2)
-            #pragma omp for schedule (guided)
-            for (int j = 0; j < procCoords.y_cells_num; j++){
-                for (int i = 0; i < procCoords.x_cells_num; i++){
-                    if ((procCoords.left and i == 0)                            or
-                        (procCoords.right and i == procCoords.x_cells_num -1)   or
-                        (procCoords.top and j == 0)                             or
-                        (procCoords.bottom and j == procCoords.y_cells_num -1)  )
-                    {
-                        g[j * procCoords.x_cells_num + i] = 0;
-                    } else {
-                        if (iterations_counter >= descent_step_iterations){
-                            g[j * procCoords.x_cells_num + i] = r[j * procCoords.x_cells_num + i] - alpha_k * g[j * procCoords.x_cells_num + i];
-                        } else {
-                            g[j * procCoords.x_cells_num + i] = r[j * procCoords.x_cells_num + i];
-                        }
-                    }
-                }
-            }
-        }
+        Compute_g (g, r, alpha);
         Dump_func(debug_fname, g, "g");
 
         // Computing step 8
@@ -423,22 +334,7 @@ void DHP_PE_RA_FDM::Compute (const ProcParams& procParams_in, const int x_proc_n
         }
 
         // Computing step 12
-        #pragma omp parallel
-        {
-            // #pragma omp for schedule (guided) collapse (2)
-            #pragma omp for schedule (guided)
-            for (int j = 0; j < procCoords.y_cells_num; j++){
-                for (int i = 0; i < procCoords.x_cells_num; i++){
-                    if ((procCoords.left and i == 0)                            or
-                        (procCoords.right and i == procCoords.x_cells_num -1)   or
-                        (procCoords.top and j == 0)                             or
-                        (procCoords.bottom and j == procCoords.y_cells_num -1)  )
-                    {} else {
-                        p[j * procCoords.x_cells_num + i] = p_prev[j * procCoords.x_cells_num + i] - tau * g[j * procCoords.x_cells_num + i];
-                    }
-                }
-            }
-        }
+        Compute_p (tau, g);
         Dump_func(debug_fname, p, "p");
 
         if (stopCriteria (p, p_prev))
@@ -1199,6 +1095,174 @@ bool DHP_PE_RA_FDM::stopCriteria(const double* const f1, const double* const f2)
 
 
 // ==================================================================================================================================================
+//                                                                                                              DHP_PE_RA_FDM::Initialize_P_and_Pprev
+// ==================================================================================================================================================
+void DHP_PE_RA_FDM::Initialize_P_and_Pprev (){
+    #pragma omp parallel
+    {
+        // boundary region
+        if (procCoords.top){
+            #pragma omp for schedule (guided)
+            for (int i = 0; i < procCoords.x_cells_num; i++){
+                p_prev[0 * procCoords.x_cells_num + i] = fi(X1 + (procCoords.x_cell_pos + i) * hx, Y1 + (procCoords.y_cell_pos + 0) * hy);
+                p[0 * procCoords.x_cells_num + i] = fi(X1 + (procCoords.x_cell_pos + i) * hx, Y1 + (procCoords.y_cell_pos + 0) * hy);
+            }
+        }
+        if (procCoords.bottom){
+            #pragma omp for schedule (guided)
+            for (int i = 0; i < procCoords.x_cells_num; i++){
+                p_prev[(procCoords.y_cells_num -1) * procCoords.x_cells_num + i] =
+                    fi(X1 + (procCoords.x_cell_pos + i) * hx, Y1 + (procCoords.y_cell_pos + (procCoords.y_cells_num -1)) * hy);
+                p[(procCoords.y_cells_num -1) * procCoords.x_cells_num + i] =
+                    fi(X1 + (procCoords.x_cell_pos + i) * hx, Y1 + (procCoords.y_cell_pos + (procCoords.y_cells_num -1)) * hy);
+            }
+        }
+        if (procCoords.left){
+            #pragma omp for schedule (guided)
+            for (int j = 0; j < procCoords.y_cells_num; j++){
+                p_prev[j * procCoords.x_cells_num + 0] = fi(X1 + (procCoords.x_cell_pos + 0) * hx, Y1 + (procCoords.y_cell_pos + j) * hy);
+                p[j * procCoords.x_cells_num + 0] = fi(X1 + (procCoords.x_cell_pos + 0) * hx, Y1 + (procCoords.y_cell_pos + j) * hy);
+            }
+        }
+        if (procCoords.right){
+            #pragma omp for schedule (guided)
+            for (int j = 0; j < procCoords.y_cells_num; j++){
+                p_prev[j * procCoords.x_cells_num + (procCoords.x_cells_num -1)] =
+                    fi(X1 + (procCoords.x_cell_pos + (procCoords.x_cells_num -1)) * hx, Y1 + (procCoords.y_cell_pos + j) * hy);
+                p[j * procCoords.x_cells_num + (procCoords.x_cells_num -1)] =
+                    fi(X1 + (procCoords.x_cell_pos + (procCoords.x_cells_num -1)) * hx, Y1 + (procCoords.y_cell_pos + j) * hy);
+            }
+        }
+
+        // internal region
+        #pragma omp for schedule (guided)
+        for (int j = static_cast<int>(procCoords.top); j < procCoords.y_cells_num - static_cast<int>(procCoords.bottom); j++){
+            memset(&(p_prev[j * procCoords.x_cells_num + static_cast<int>(procCoords.left)]), 0,
+                procCoords.x_cells_num - static_cast<int>(procCoords.right) - static_cast<int>(procCoords.left));
+
+            // for (int i = static_cast<int>(procCoords.left); i < procCoords.x_cells_num - static_cast<int>(procCoords.right); i++){
+            //     p_prev[j * procCoords.x_cells_num + i] = 0;
+            // }
+        }
+    }
+}
+
+
+// ==================================================================================================================================================
+//                                                                                                                           DHP_PE_RA_FDM::Compute_r
+// ==================================================================================================================================================
+void DHP_PE_RA_FDM::Compute_r (const double* const delta_p, double* const r) const{
+    #pragma omp parallel
+    {
+        // boundary region
+        if (procCoords.top){
+
+            memset(&(r[(procCoords.y_cells_num -1) * procCoords.x_cells_num + 0]), 0,
+                procCoords.x_cells_num);
+        }
+        if (procCoords.bottom){
+
+            memset(&(r[(procCoords.y_cells_num -1) * procCoords.x_cells_num + 0]), 0,
+                procCoords.x_cells_num);
+        }
+        if (procCoords.left){
+            #pragma omp for schedule (guided)
+            for (int j = 0; j < procCoords.y_cells_num; j++){
+                r[j * procCoords.x_cells_num + 0] = 0;
+            }
+        }
+        if (procCoords.right){
+            #pragma omp for schedule (guided)
+            for (int j = 0; j < procCoords.y_cells_num; j++){
+                r[j * procCoords.x_cells_num + (procCoords.x_cells_num -1)] = 0;
+            }
+        }
+
+        // internal region
+        // #pragma omp for schedule (guided) collapse (2)
+        #pragma omp for schedule (guided)
+        for (int j = static_cast<int>(procCoords.top); j < procCoords.y_cells_num - static_cast<int>(procCoords.bottom); j++){
+            for (int i = static_cast<int>(procCoords.left); i < procCoords.x_cells_num - static_cast<int>(procCoords.right); i++){
+                r[j * procCoords.x_cells_num + i] =
+                    delta_p[j * procCoords.x_cells_num + i] -
+                    F(X1 + (procCoords.x_cell_pos + i) * hx, Y1 + (procCoords.y_cell_pos + j) * hy)
+                    ;
+            }
+        }
+    }
+}
+
+
+// ==================================================================================================================================================
+//                                                                                                                           DHP_PE_RA_FDM::Compute_g
+// ==================================================================================================================================================
+void DHP_PE_RA_FDM::Compute_g (double* const g, const double* const r, const double alpha) const{
+    #pragma omp parallel
+    {
+        // boundary region
+        if (procCoords.top){
+
+            memset(&(g[(procCoords.y_cells_num -1) * procCoords.x_cells_num + 0]), 0,
+                procCoords.x_cells_num);
+        }
+        if (procCoords.bottom){
+
+            memset(&(g[(procCoords.y_cells_num -1) * procCoords.x_cells_num + 0]), 0,
+                procCoords.x_cells_num);
+        }
+        if (procCoords.left){
+            #pragma omp for schedule (guided)
+            for (int j = 0; j < procCoords.y_cells_num; j++){
+                g[j * procCoords.x_cells_num + 0] = 0;
+            }
+        }
+        if (procCoords.right){
+            #pragma omp for schedule (guided)
+            for (int j = 0; j < procCoords.y_cells_num; j++){
+                g[j * procCoords.x_cells_num + (procCoords.x_cells_num -1)] = 0;
+            }
+        }
+
+        // internal region
+        if (iterations_counter >= descent_step_iterations){
+            // #pragma omp for schedule (guided) collapse (2)
+            #pragma omp for schedule (guided)
+            for (int j = static_cast<int>(procCoords.top); j < procCoords.y_cells_num - static_cast<int>(procCoords.bottom); j++){
+                for (int i = static_cast<int>(procCoords.left); i < procCoords.x_cells_num - static_cast<int>(procCoords.right); i++){
+                    g[j * procCoords.x_cells_num + i] = r[j * procCoords.x_cells_num + i] - alpha * g[j * procCoords.x_cells_num + i];
+                }
+            }
+        } else {
+            // #pragma omp for schedule (guided) collapse (2)
+            #pragma omp for schedule (guided)
+            for (int j = static_cast<int>(procCoords.top); j < procCoords.y_cells_num - static_cast<int>(procCoords.bottom); j++){
+                for (int i = static_cast<int>(procCoords.left); i < procCoords.x_cells_num - static_cast<int>(procCoords.right); i++){
+                    g[j * procCoords.x_cells_num + i] = r[j * procCoords.x_cells_num + i];
+                }
+            }
+        }   
+    }
+}
+
+
+// ==================================================================================================================================================
+//                                                                                                                           DHP_PE_RA_FDM::Compute_p
+// ==================================================================================================================================================
+void DHP_PE_RA_FDM::Compute_p (const double tau, const double* const g) {
+    #pragma omp parallel
+    {
+        // #pragma omp for schedule (guided) collapse (2)
+        #pragma omp for schedule (guided)
+        for (int j = static_cast<int>(procCoords.top); j < procCoords.y_cells_num - static_cast<int>(procCoords.bottom); j++){
+            for (int i = static_cast<int>(procCoords.left); i < procCoords.x_cells_num - static_cast<int>(procCoords.right); i++){
+                p[j * procCoords.x_cells_num + i] = p_prev[j * procCoords.x_cells_num + i] - tau * g[j * procCoords.x_cells_num + i];
+            }
+        }
+    }
+}
+
+
+// ==================================================================================================================================================
 //                                                                                                                                DHP_PE_RA_FDM::Dump
 // ==================================================================================================================================================
 void DHP_PE_RA_FDM::Dump_func(const string& fout_name, const double* const f, const string& func_label) const{
@@ -1272,7 +1336,7 @@ void DHP_PE_RA_FDM::Dump_func(const string& fout_name, const double* const f, co
 
 
 // ==================================================================================================================================================
-//                                                                                                                                DHP_PE_RA_FDM::Dump
+//                                                                                                                          ProcComputingCoords::Dump
 // ==================================================================================================================================================
 void ProcComputingCoords::Dump(const string& fout_name) const{
     fstream fout (fout_name.c_str(), fstream::out | fstream::app);
