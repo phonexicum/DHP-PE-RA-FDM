@@ -885,7 +885,7 @@ void DHP_PE_RA_FDM::Counting_5_star (const double* const f, double* const delta_
             {
                 j = 0;
                 i = 0;
-                if (not procCoords.top and not procCoords.bottom) {
+                if (not procCoords.top and not procCoords.bottom and not procCoords.left) {
                     delta_f[j * procCoords.x_cells_num + i] = (
                             (f[j * procCoords.x_cells_num + i  ] - recv_message_lr [0] ) / hx -
                             (f[j * procCoords.x_cells_num + i+1] - f[j * procCoords.x_cells_num + i  ]) / hx
@@ -902,7 +902,7 @@ void DHP_PE_RA_FDM::Counting_5_star (const double* const f, double* const delta_
             {
                 j = 0;
                 i = procCoords.x_cells_num -1;
-                if (not procCoords.top and not procCoords.bottom){
+                if (not procCoords.top and not procCoords.bottom and not procCoords.right){
                     delta_f[j * procCoords.x_cells_num + i] = (
                             (f[j * procCoords.x_cells_num + i  ] - f[j * procCoords.x_cells_num + i-1]) / hx -
                             (recv_message_rl [0]                 - f[j * procCoords.x_cells_num + i  ]) / hx
@@ -956,7 +956,7 @@ void DHP_PE_RA_FDM::Counting_5_star (const double* const f, double* const delta_
             {
                 j = 0;
                 i = 0;
-                if (not procCoords.left and not procCoords.right) {
+                if (not procCoords.left and not procCoords.right and not procCoords.top) {
                     delta_f[j * procCoords.x_cells_num + i] = (
                             (f[j * procCoords.x_cells_num + i  ] - recv_message_lr [0]                ) / hx -
                             (recv_message_rl[0]                  - f[j * procCoords.x_cells_num + i  ]) / hx
@@ -973,7 +973,7 @@ void DHP_PE_RA_FDM::Counting_5_star (const double* const f, double* const delta_
             {
                 j = procCoords.y_cells_num -1;
                 i = 0;
-                if (not procCoords.left and not procCoords.right){
+                if (not procCoords.left and not procCoords.right and not procCoords.bottom){
                     delta_f[j * procCoords.x_cells_num + i] = (
                             (f[j * procCoords.x_cells_num + i  ] - recv_message_lr[j]                   ) / hx -
                             (recv_message_rl[j]                  - f[j * procCoords.x_cells_num + i  ]  ) / hx
@@ -1138,7 +1138,7 @@ void DHP_PE_RA_FDM::Initialize_P_and_Pprev (){
         #pragma omp for schedule (guided)
         for (int j = static_cast<int>(procCoords.top); j < procCoords.y_cells_num - static_cast<int>(procCoords.bottom); j++){
             memset(&(p_prev[j * procCoords.x_cells_num + static_cast<int>(procCoords.left)]), 0,
-                procCoords.x_cells_num - static_cast<int>(procCoords.right) - static_cast<int>(procCoords.left));
+                (procCoords.x_cells_num - static_cast<int>(procCoords.right) - static_cast<int>(procCoords.left)) * sizeof(*p_prev));
 
             // for (int i = static_cast<int>(procCoords.left); i < procCoords.x_cells_num - static_cast<int>(procCoords.right); i++){
             //     p_prev[j * procCoords.x_cells_num + i] = 0;
@@ -1157,13 +1157,13 @@ void DHP_PE_RA_FDM::Compute_r (const double* const delta_p, double* const r) con
         // boundary region
         if (procCoords.top){
 
-            memset(&(r[(procCoords.y_cells_num -1) * procCoords.x_cells_num + 0]), 0,
-                procCoords.x_cells_num);
+            memset(&(r[0 * procCoords.x_cells_num + 0]), 0,
+                procCoords.x_cells_num * sizeof(*r));
         }
         if (procCoords.bottom){
 
             memset(&(r[(procCoords.y_cells_num -1) * procCoords.x_cells_num + 0]), 0,
-                procCoords.x_cells_num);
+                procCoords.x_cells_num * sizeof(*r));
         }
         if (procCoords.left){
             #pragma omp for schedule (guided)
@@ -1202,13 +1202,13 @@ void DHP_PE_RA_FDM::Compute_g (double* const g, const double* const r, const dou
         // boundary region
         if (procCoords.top){
 
-            memset(&(g[(procCoords.y_cells_num -1) * procCoords.x_cells_num + 0]), 0,
-                procCoords.x_cells_num);
+            memset(&(g[0 * procCoords.x_cells_num + 0]), 0,
+                procCoords.x_cells_num * sizeof(*g));
         }
         if (procCoords.bottom){
 
             memset(&(g[(procCoords.y_cells_num -1) * procCoords.x_cells_num + 0]), 0,
-                procCoords.x_cells_num);
+                procCoords.x_cells_num * sizeof(*g));
         }
         if (procCoords.left){
             #pragma omp for schedule (guided)
