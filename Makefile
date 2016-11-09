@@ -3,7 +3,7 @@ superPrac2: main.cpp DHP_PE_RA_FDM.cpp DHP_PE_RA_FDM.h
 	mkdir -p output
 
 superPrac2-omp: main.cpp DHP_PE_RA_FDM.cpp DHP_PE_RA_FDM.h
-	mpicxx -o superPrac2-omp main.cpp DHP_PE_RA_FDM.cpp DHP_PE_RA_FDM.h -Wall -std=gnu++98 -fopenmp
+	mpixlcxx_r -o superPrac2-omp main.cpp DHP_PE_RA_FDM.cpp -qsmp=omp
 	mkdir -p output
 
 .PHONY: clean

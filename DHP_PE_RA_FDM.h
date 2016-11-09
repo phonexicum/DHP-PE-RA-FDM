@@ -84,7 +84,7 @@ struct ProcComputingCoords {
 // 
 //      boundary conditions: function 'fi'
 //      right side of Laplace operator: function 'F'
-//      stopping criteria: function 'stopCriteria'
+//      stopping criteria: function 'StopCriteria'
 //
 // Both: boundary conditions and right side of Laplace operator, must be defined in successor class.
 // 
@@ -135,7 +135,7 @@ class DHP_PE_RA_FDM {
     // boundary conditions
     virtual double fi (const double x, const double y) const = 0;
     // stopping criteria (must return true/false value for each process)
-    virtual bool stopCriteria (const double* const f1, const double* const f2);
+    virtual bool StopCriteria (const double* const f1, const double* const f2);
 
     MPI_Comm PrepareMPIComm (const ProcParams& procParams_in, const int x_proc_num, const int y_proc_num) const;
 
@@ -146,14 +146,9 @@ class DHP_PE_RA_FDM {
 
     // This function computes scalar product of two functions. Scalar product ignores function values on the boundaries
     // 
-    //  return value: scalar_product of two functions, if the process rank equals to 0, returns 0 otherwise
+    //  return value: global scalar_product of two functions for each of the processes
     //  
     double ComputingScalarProduct (const double* const f, const double* const delta_f);
-
-    // 
-    // return value: broadcasted param gotten from process with rank == 0
-    // 
-    double BroadcastParameter (double param);
 
     void Initialize_P_and_Pprev ();
     void Compute_r (const double* const delta_p, double* const r) const;
@@ -183,7 +178,6 @@ class DHP_PE_RA_FDM {
     double* recv_message_bu;
     MPI_Request* recv_reqs_5_star;
     MPI_Request* send_reqs_5_star;
-    double* gather_double_per_process;
 
     enum MPI_MessageTypes {
         StarLeftRight,

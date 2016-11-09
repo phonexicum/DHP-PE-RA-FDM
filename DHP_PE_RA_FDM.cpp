@@ -114,7 +114,6 @@ recv_message_td (NULL),
 recv_message_bu (NULL),
 recv_reqs_5_star (NULL),
 send_reqs_5_star (NULL),
-gather_double_per_process (NULL),
 
 debug_fname (string("debug.txt"))
 
@@ -183,9 +182,6 @@ DHP_PE_RA_FDM::~DHP_PE_RA_FDM (){
     if (send_reqs_5_star != NULL){
         delete [] send_reqs_5_star; send_reqs_5_star = NULL;
     }
-    if (gather_double_per_process != NULL){
-        delete [] gather_double_per_process; gather_double_per_process = NULL;
-    }
     if (procParams.comm != MPI_COMM_WORLD){
         MPI_Comm_free(&procParams.comm);
     }
@@ -244,6 +240,9 @@ void DHP_PE_RA_FDM::Compute (const ProcParams& procParams_in, const int x_proc_n
     double* delta_r = new double [procCoords.x_cells_num * procCoords.y_cells_num];
 
     double scalar_product_delta_g_and_g = 1;
+    double scalar_product_delta_r_and_g = 1;
+    double alpha = 0; // equality to zero is important
+    double tau = 0;
 
     // Computing step 1
     Initialize_P_and_Pprev();
@@ -263,7 +262,6 @@ void DHP_PE_RA_FDM::Compute (const ProcParams& procParams_in, const int x_proc_n
         Compute_r (delta_p, r);
         Dump_func(debug_fname, r, "r");
 
-        double scalar_product_delta_r_and_g = 1;
         if (iterations_counter >= descent_step_iterations){
             // Computing step 4
             Counting_5_star (r, delta_r);
@@ -273,15 +271,9 @@ void DHP_PE_RA_FDM::Compute (const ProcParams& procParams_in, const int x_proc_n
             scalar_product_delta_r_and_g = ComputingScalarProduct(delta_r, g);
             if (debug and procParams.rank == 0)
                 cout << "scalar_product_delta_r_and_g= " << scalar_product_delta_r_and_g << endl;
-        }
 
-        // Computing step 6
-        double alpha = 0;
-        if (iterations_counter >= descent_step_iterations){
-            if (procParams.rank == 0){
-                alpha = scalar_product_delta_r_and_g / scalar_product_delta_g_and_g;
-            }
-            alpha = BroadcastParameter(alpha);
+            // Computing step 6
+            alpha = scalar_product_delta_r_and_g / scalar_product_delta_g_and_g;
             if (debug and procParams.rank == 0)
                 cout << "alpha= " << alpha << endl;
         }
@@ -305,21 +297,9 @@ void DHP_PE_RA_FDM::Compute (const ProcParams& procParams_in, const int x_proc_n
             cout << "scalar_product_delta_g_and_g= " << scalar_product_delta_g_and_g << endl;
 
         // Computing step 11
-        double tau = 0;
-        if (procParams.rank == 0){
-            if (scalar_product_delta_g_and_g != 0){
-                tau = scalar_product_r_and_g / scalar_product_delta_g_and_g;
-            } else {
-                // tau can not be negative by algorithm,
-                //  this is a sign for error catching
-                tau = -1;
-            }
-        }
-        tau = BroadcastParameter(tau);
-        if (debug and procParams.rank == 0)
-            cout << "tau= " << tau << endl;
-
-        if (tau == -1){
+        if (scalar_product_delta_g_and_g != 0){
+            tau = scalar_product_r_and_g / scalar_product_delta_g_and_g;
+        } else {
             throw DHP_PE_RA_FDM_Exception( "Error. there is a divizion by zero in computations. Zero value is scalar product of delta_g and g.\n"
                 "Probably there can be next problems:\n"
                 "\t1) You have to increase amount of descent step iterations (default: 1);\n"
@@ -327,17 +307,18 @@ void DHP_PE_RA_FDM::Compute (const ProcParams& procParams_in, const int x_proc_n
                 "\t3) You specified too small matrix (internal region does not contain internal points, the only points are in boundary region).\n"
                 "Iteration process terminated.");
 
-            // 'p' - is side effect of computation and within error,
-            // last correct computation will be taken from p_prev
+            // 'p' - is side effect of computation and within error, last correct computation will be restored from p_prev
             swap(p, p_prev);
             break;
         }
+        if (debug and procParams.rank == 0)
+            cout << "tau= " << tau << endl;
 
         // Computing step 12
         Compute_p (tau, g);
         Dump_func(debug_fname, p, "p");
 
-        if (stopCriteria (p, p_prev))
+        if (StopCriteria (p, p_prev))
             break;
 
         swap(p, p_prev);
@@ -349,24 +330,6 @@ void DHP_PE_RA_FDM::Compute (const ProcParams& procParams_in, const int x_proc_n
     delete [] delta_p; delta_p = NULL;
     delete [] delta_g; delta_g = NULL;
     delete [] delta_r; delta_r = NULL;
-}
-
-// ==================================================================================================================================================
-//                                                                                                                  DHP_PE_RA_FDM::BroadcastParameter
-// ==================================================================================================================================================
-double DHP_PE_RA_FDM::BroadcastParameter (double param){
-
-    int ret = MPI_Bcast(
-        &param,         // void *buffer,
-        1,              // int count,
-        MPI_DOUBLE,     // MPI_Datatype datatype,
-        0,              // int root, 
-        procParams.comm // MPI_Comm comm
-    );
-
-    if (ret != MPI_SUCCESS) throw DHP_PE_RA_FDM_Exception("Error broadcasting value.");
-
-    return param;
 }
 
 
@@ -387,35 +350,64 @@ double DHP_PE_RA_FDM::ComputingScalarProduct(const double* const f, const double
         }
     }
 
-    if (gather_double_per_process == NULL and procParams.rank == 0)
-        gather_double_per_process = new double [procParams.size];
+    double global_scalar_product = 0;
 
-    int ret = MPI_Gather(
+    int ret = MPI_Allreduce(
         &scalar_product,            // const void *sendbuf,
-        1,                          // int sendcount,
-        MPI_DOUBLE,                 // MPI_Datatype sendtype,
-        gather_double_per_process,  // void *recvbuf,
-        1,                          // int recvcount, (per process !)
-        MPI_DOUBLE,                 // MPI_Datatype recvtype,
-        0,                          // int root,
+        &global_scalar_product,     // void *recvbuf,
+        1,                          // int count,
+        MPI_DOUBLE,                 // MPI_Datatype datatype,
+        MPI_SUM,                    // MPI_Op op,
         procParams.comm             // MPI_Comm comm
     );
+    if (ret != MPI_SUCCESS) throw DHP_PE_RA_FDM_Exception("Error reducing scalar_product.");
 
-    if (ret != MPI_SUCCESS) throw DHP_PE_RA_FDM_Exception("Error gathering scalar_product.");
+    return global_scalar_product;
+}
 
-    if (procParams.rank == 0){
-        scalar_product = 0;
-        #pragma omp parallel
-        {
-            #pragma omp for schedule (static) reduction(+:scalar_product)
-            for (int i = 0; i < procParams.size; i++){
-                scalar_product += gather_double_per_process[i];
-            }
+
+// ==================================================================================================================================================
+//                                                                                                                        DHP_PE_RA_FDM::StopCriteria
+// ==================================================================================================================================================
+bool DHP_PE_RA_FDM::StopCriteria(const double* const f1, const double* const f2){
+
+    // double norm = 0;
+    // #pragma omp parallel reduction(max:norm)
+    // {
+    //     #pragma omp for schedule (static)
+    //     for (int i = 0; i < procCoords.x_cells_num * procCoords.y_cells_num; i++){
+    //         norm = max(norm, abs(f1[i] - f2[i]));
+    //     }
+    // }
+
+    double norm = 0;
+    double priv_norm = 0;
+    #pragma omp parallel firstprivate (priv_norm)
+    {
+        #pragma omp for schedule (static)
+        for (int i = 0; i < procCoords.x_cells_num * procCoords.y_cells_num; i++){
+            priv_norm = max(priv_norm, abs(f1[i] - f2[i]));
         }
-        return scalar_product;
-    } else {
-        return 0;
+
+        #pragma omp critical
+        {
+            norm = max(priv_norm, norm);
+        }
     }
+
+    double global_norm = 0;
+
+    int ret = MPI_Allreduce(
+        &norm,                      // const void *sendbuf,
+        &global_norm,               // void *recvbuf,
+        1,                          // int count,
+        MPI_DOUBLE,                 // MPI_Datatype datatype,
+        MPI_MAX,                    // MPI_Op op,
+        procParams.comm             // MPI_Comm comm
+    );
+    if (ret != MPI_SUCCESS) throw DHP_PE_RA_FDM_Exception("Error reducing scalar_product.");
+
+    return global_norm < eps;
 }
 
 
@@ -1017,80 +1009,6 @@ void DHP_PE_RA_FDM::Counting_5_star (const double* const f, double* const delta_
 
     if (ret != MPI_SUCCESS) throw DHP_PE_RA_FDM_Exception("Error waiting for sends after previous Counting_5_star.");
 
-}
-
-// ==================================================================================================================================================
-//                                                                                                                                  DHP_PE_RA_FDM::fi
-// ==================================================================================================================================================
-bool DHP_PE_RA_FDM::stopCriteria(const double* const f1, const double* const f2){
-
-    double norm = 0;
-    // #pragma omp parallel reduction(max:norm)
-    double priv_norm = 0;
-    #pragma omp parallel firstprivate (priv_norm)
-    {
-        #pragma omp for schedule (static)
-        for (int i = 0; i < procCoords.x_cells_num * procCoords.y_cells_num; i++){
-            priv_norm = max(priv_norm, abs(f1[i] - f2[i]));
-        }
-
-        #pragma omp critical
-        {
-            norm = max(priv_norm, norm);
-        }
-    }
-
-    if (gather_double_per_process == NULL and procParams.rank == 0)
-        gather_double_per_process = new double [procParams.size];
-
-    int ret = MPI_Gather(
-        &norm,                      // const void *sendbuf,
-        1,                          // int sendcount,
-        MPI_DOUBLE,                 // MPI_Datatype sendtype,
-        gather_double_per_process,  // void *recvbuf,
-        1,                          // int recvcount, (per process !)
-        MPI_DOUBLE,                 // MPI_Datatype recvtype,
-        0,                          // int root,
-        procParams.comm             // MPI_Comm comm
-    );
-
-    if (ret != MPI_SUCCESS) throw DHP_PE_RA_FDM_Exception("Error gathering norm for checking stop criteria.");
-
-    int stop;
-    if (procParams.rank == 0){
-        norm = 0;
-        // #pragma omp parallel reduction(max:norm)
-        double priv_norm = 0;
-        #pragma omp parallel firstprivate (priv_norm)
-        {
-            #pragma omp for schedule (static)
-            for (int i = 0; i < procParams.size; i++){
-                priv_norm = max(priv_norm, gather_double_per_process[i]);
-            }
-
-            #pragma omp critical
-            {
-                norm = max(priv_norm, norm);
-            }
-        }
-
-        stop = static_cast<int>(norm < eps);
-
-        if (debug)
-            cout << "stop= " << stop << " norm= " << norm << " eps= " << eps << endl;
-    }
-
-    ret = MPI_Bcast(
-        &stop,          // void *buffer,
-        1,              // int count,
-        MPI_INT,        // MPI_Datatype datatype,
-        0,              // int root, 
-        procParams.comm // MPI_Comm comm
-    );
-
-    if (ret != MPI_SUCCESS) throw DHP_PE_RA_FDM_Exception("Error broadcasting value.");
-
-    return stop;
 }
 
 
