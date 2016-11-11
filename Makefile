@@ -1,81 +1,61 @@
-superPrac2: main.cpp DHP_PE_RA_FDM.cpp DHP_PE_RA_FDM.h
-	mpicxx -o superPrac2 main.cpp DHP_PE_RA_FDM.cpp DHP_PE_RA_FDM.h -Wall -std=gnu++98 -Wno-unknown-pragmas
-	mkdir -p output
+# module add slurm
+# module add impi/5.0.1
+# module add cuda/5.5
 
-superPrac2-omp: main.cpp DHP_PE_RA_FDM.cpp DHP_PE_RA_FDM.h
-	mpixlcxx_r -o superPrac2-omp main.cpp DHP_PE_RA_FDM.cpp -qsmp=omp
-	mkdir -p output
+
+lcompile:
+	nvcc -ccbin mpicxx main.cpp DHP_PE_RA_FDM.cpp DHP_PE_RA_FDM_cuda.cu -o superPrac2 -Xcompiler -Wall
+	cp ./superPrac2 ~/_scratch/superPrac2
+
+
+# SOURCES=main.cpp DHP_PE_RA_FDM.cpp
+# CUSOURCES=DHP_PE_RA_FDM_kernels.cu
+# INCLUDES=DHP_PE_RA_FDM.h
+# OBJECTS=$(SOURCES:.cpp=.cpp.o)
+# CUOBJECTS=$(CUSOURCES:.cu=.cu.o)
+# EXECUTABLE=superPrac2
+
+# lcompile: $(EXECUTABLE)
+
+# $(EXECUTABLE): $(OBJECTS) $(CUOBJECTS)
+# 	g++ -L/opt/cuda/cuda-5.5/bin/..//bin64 -lcudart $(OBJECTS) $(CUOBJECTS) -o $@
+# 	cp ./$(EXECUTABLE) ~/_scratch/$(EXECUTABLE)
+
+# %.cpp.o: %.cpp
+# 	mpicxx -I/opt/cuda/cuda-5.5/bin/..//include $< $(INCLUDES) -c -o $@
+
+# %.cu.o: %.cu
+# 	nvcc -v -arch=sm_20 -Xptxas -v $< -c -o $@
+
 
 .PHONY: clean
 
-run:
-	mpirun -np 2 ./superPrac2 100 0.0001 output
+clean:
+	rm -rf superPrac2 output* *.o
 
-omprun:
-	mpirun -np 2 -env OMP_NUM_THREADS=2 ./superPrac2-omp 100 0.0001 output
 
 graph:
 	./generate_gnuplot.py output
 	./gnuplot.script
 
-clean:
-	rm -f -R superPrac2 superPrac2-omp output*
-
-
-
-jmount:
-	mkdir -p ./mount/
-	sshfs -o nonempty edu-cmc-stud16-621-02@bluegene.hpc.cs.msu.ru:/home/edu-cmc-stud16-621-02/DHP ./mount/
 
 lmount:
 	mkdir -p ./mount/
-	sshfs -o nonempty avasilenko2_1854@lomonosov.parallel.ru:/mnt/data/users/dm4/vol12/avasilenko2_1854 ./mount/
-
-
-
-jcompile:
-	mpicxx main.cpp DHP_PE_RA_FDM.cpp DHP_PE_RA_FDM.h -o superPrac2 -std=gnu++98 -Wall -Wno-unknown-pragmas
-
-jcompile-omp:
-	mpixlcxx_r main.cpp DHP_PE_RA_FDM.cpp -o superPrac2-omp -qsmp=omp
-
-lcompile:
-	# module add slurm/15.08
-	# module add impi/5.0.1
-	mpicxx main.cpp DHP_PE_RA_FDM.cpp DHP_PE_RA_FDM.h -o superPrac2 -std=c++0x -Wall -Wno-unknown-pragmas
-
-	cp ./superPrac2 ~/_scratch/superPrac2
-
-
+	sshfs -o nonempty avasilenko2_1854@lomonosov.parallel.ru:/mnt/data/users/dm4/vol12/avasilenko2_1854/cuda ./mount/
 
 upload:
 	cp Makefile ./mount/
-
 	cp main.cpp ./mount/
 	cp DHP_PE_RA_FDM.cpp ./mount/
 	cp DHP_PE_RA_FDM.h ./mount/
+	cp DHP_PE_RA_FDM_cuda.cu ./mount/
 
+ldown:
+	cp -R ~/_scratch/output/ ./output/
 
-
-jprepare:
-	mkdir -p ./output/bgp-out-1-1000
-	mkdir -p ./output/bgp-out-1-2000
-
-	mkdir -p ./output/bgp-out-128-1000
-	mkdir -p ./output/bgp-out-256-1000
-	mkdir -p ./output/bgp-out-512-1000
-
-	mkdir -p ./output/bgp-out-128-2000
-	mkdir -p ./output/bgp-out-256-2000
-	mkdir -p ./output/bgp-out-512-2000
-
-	mkdir -p ./output/bgp-out-128-1000-omp
-	mkdir -p ./output/bgp-out-256-1000-omp
-	mkdir -p ./output/bgp-out-512-1000-omp
-
-	mkdir -p ./output/bgp-out-128-2000-omp
-	mkdir -p ./output/bgp-out-256-2000-omp
-	mkdir -p ./output/bgp-out-512-2000-omp
+down:
+	mkdir -p ./output/
+	cp -R ./mount/output/ ./output/
 
 lprepare:
 	mkdir -p ./_scratch/output/lom-out-1-1000

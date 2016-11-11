@@ -1,5 +1,7 @@
 # DHP_PE_RA_FDM
 
+`mpi-cuda` branch is created to write DHP-PE-RA-FDM algorithm with cuda acceleration for ***Tesla X2070*** videocards under lomonosov supercomputer.
+
 ***DHP_PE_RA_FDM*** - Dirichlet-Problem-Poisson's-Equation-Rectangular-Area-Finite-Difference-Method
 
 This algorithm solves the Dirichlet problem for Poisson's equation in rectangular area using "steep descent iterations" for first several iterations and "conjugate gragient iterations" afterwards.
@@ -16,7 +18,7 @@ Algorithm parameters:
 
 - boundary conditions: function 'fi'
 - right side of Laplace operator: function 'F'
-- stopping criteria: function 'stopCriteria'
+- stopping criteria: function 'StopCriteria'
 
 Usage:
 
@@ -35,7 +37,6 @@ C++ version:
 Considered supercomputers:
 
 - Lomonosov
-- Blue Gene/P (g++ -std=gnu++98)
 
 Example:
 
@@ -55,44 +56,43 @@ Example:
 - `./algorithm/` - problem formulation (*russian only*) (contains calculating formules) and scheme of numerical method
 - `./joutput/` and `./loutput/` - directories contain some results of running benchmark under BlueGene/P and Lomonosov supercomputers
 
+## Lomonosov videocard technical specification
+
+cudaDeviceProp
+```
+deviceNum= 2
+videocard-name= Tesla X2070
+cudaVersion= 2.0
+
+multiProcessorCount= 14
+warpSize= 32
+maxThreadsPerBlock= 1024
+maxGridSize= 65535 65535 65535
+maxThreadsDim= 1024 1024 64
+
+totalGlobalMem= 5636554752 // 5 GB
+totalConstMem= 65536
+sharedMemPerBlock= 49152
+regsPerBlock= 32768
+
+canMapHostMemory= 1     // Memory can be locked (disable virtual memory mechanism) - enables to copy memory from host to device through PCI making it asynchronously past CPU
+unifiedAddressing= 1    // Memory allocated by cudaHostAllocate (..., cudaHostAllocMapped) automaticaly became mapped and pointer to the memory is unique for CPU and other devices
+computeMode= 0          // Multiple threads can use cudaSetDevice() with this device
+asyncEngineCount= 2     // 1 - device can copy and execute kernel in parallel, 2 - can copy in both directions and execute kernel
+concurrentKernels= 1    // device's kernels can be computed in parallel
+deviceOverlap= 1        // Device can concurrently copy memory and execute a kernel
+```
+
 ## supercomputer commands
-
-### Blue Gene
-
-```
-mpisubmit.bg -n 1 -m smp -w 02:00:00 -t PREFER_TORUS ./superPrac2 1000 0.0001 output/bgp-out-1-1000 # 53:00 sec
-mpisubmit.bg -n 1 -m smp -w 02:00:00 -t PREFER_TORUS ./superPrac2 2000 0.0001 output/bgp-out-1-2000
-
-mpisubmit.bg -n 128 -m smp -w 00:15:00 -t PREFER_TORUS ./superPrac2 1000 0.0001 output/bgp-out-128-1000 # 25 sec
-mpisubmit.bg -n 128 -m smp -w 00:15:00 -t PREFER_TORUS ./superPrac2 2000 0.0001 output/bgp-out-128-2000 # 3:20 sec
-mpisubmit.bg -n 128 -m smp -env OMP_NUM_THREADS=3 -w 00:15:00 -t PREFER_TORUS ./superPrac2-omp 1000 0.0001 output/bgp-out-128-1000-omp # 5 sec
-mpisubmit.bg -n 128 -m smp -env OMP_NUM_THREADS=3 -w 00:15:00 -t PREFER_TORUS ./superPrac2-omp 2000 0.0001 output/bgp-out-128-2000-omp # 33 sec
-
-mpisubmit.bg -n 256 -m smp -w 00:10:00 -t PREFER_TORUS ./superPrac2 1000 0.0001 output/bgp-out-256-1000 # 12 sec
-mpisubmit.bg -n 256 -m smp -w 00:10:00 -t PREFER_TORUS ./superPrac2 2000 0.0001 output/bgp-out-256-2000 # 1:40 sec
-mpisubmit.bg -n 256 -m smp -env OMP_NUM_THREADS=3 -w 00:10:00 -t PREFER_TORUS ./superPrac2-omp 1000 0.0001 output/bgp-out-256-1000-omp # 3 sec
-mpisubmit.bg -n 256 -m smp -env OMP_NUM_THREADS=3 -w 00:10:00 -t PREFER_TORUS ./superPrac2-omp 2000 0.0001 output/bgp-out-256-2000-omp # 17 sec
-
-mpisubmit.bg -n 512 -m smp -w 00:05:00 -t PREFER_TORUS ./superPrac2 1000 0.0001 output/bgp-out-512-1000 # 6 sec
-mpisubmit.bg -n 512 -m smp -w 00:05:00 -t PREFER_TORUS ./superPrac2 2000 0.0001 output/bgp-out-512-2000 # 50 sec
-mpisubmit.bg -n 512 -m smp -env OMP_NUM_THREADS=3 -w 00:05:00 -t PREFER_TORUS ./superPrac2-omp 1000 0.0001 output/bgp-out-512-1000-omp # 2 sec
-mpisubmit.bg -n 512 -m smp -env OMP_NUM_THREADS=3 -w 00:05:00 -t PREFER_TORUS ./superPrac2-omp 2000 0.0001 output/bgp-out-512-2000-omp # 10 sec
-
-
-mpisubmit.bg -n 1 -m smp -w 02:00:00 -t PREFER_TORUS
-mpisubmit.bg -n 16 -m smp -w 02:00:00 -t PREFER_TORUS
-mpisubmit.bg -n 64 -m smp -w 02:00:00 -t PREFER_TORUS
-mpisubmit.bg -n 128 -m smp -w 00:15:00 -t PREFER_TORUS
-mpisubmit.bg -n 256 -m smp -w 00:10:00 -t PREFER_TORUS
-mpisubmit.bg -n 512 -m smp -w 00:05:00 -t PREFER_TORUS
-mpisubmit.bg -n 1024 -m smp -w 00:02:00 -t PREFER_TORUS
-```
 
 ### Lomonosov
 
 Lomonosov execute tasks in context of `~/_scratch` directory.
 
 ```
+sbatch -p gputest -n 1 --ntasks-per-node=2 --time=0-00:15:00 impi ./superPrac2 10 0.001 output
+
+
 sbatch -p test -n 1 --time=0-00:07:00 impi ./superPrac2 1000 0.0001 output/lom-out-1-1000 # 5:20 sec
 sbatch -p regular4 -n 1 --time=0-00:59:30 impi ./superPrac2 2000 0.0001 output/lom-out-1-2000 # 42:00 sec
 

@@ -11,9 +11,7 @@
 
 
 #include <mpi.h>
-#ifdef _OPENMP
-#include <omp.h>
-#endif
+#include <cuda_runtime.h>
 
 
 #include <sys/time.h> // gettimeofday
@@ -31,7 +29,6 @@ using std::endl;
 using std::fstream;
 using std::stringstream;
 using std::string;
-// using std::to_string;
 
 using std::setprecision;
 using std::numeric_limits;
@@ -43,26 +40,21 @@ class DHP_PE_RA_FDM_superprac : public DHP_PE_RA_FDM {
 
         public:
 
-    DHP_PE_RA_FDM_superprac(const int grid_size_x, const int grid_size_y, const double eps_):
-        DHP_PE_RA_FDM(0, 0, 3, 3, grid_size_x, grid_size_y, eps_, 1) {}
+    DHP_PE_RA_FDM_superprac(const int grid_size_x, const int grid_size_y, const double eps_, const int cudaDevNum):
+        DHP_PE_RA_FDM(0, 0, 3, 3, grid_size_x, grid_size_y, eps_, cudaDevNum, 1) {}
 
     void Print_p (const string& dout_name) const;
-
-        private:
-
-    double F (const double x, const double y) const;
-    double fi (const double x, const double y) const;
-
-    // Exact solution
-    // DSolveValue[{    Laplasian(u[x,y], {x, y}) = -(x*x + y*y)/((1+x*y)*(1+x*y))    ,    DirichletCondition[ u[x, y] = Piecewise[{{ln(1+x*y) , (y == 0 || y == 3) && ( 0 <= x && x <= 3) || (x == 0 || x == 3) && ( 0 <= y && y <= 3) }}], True];    }, u[x, y], {x, y} \[Element]    Rectangle[{0, 3}, {0, 3}]    ]
 
 };
 
 // ==================================================================================================================================================
 // ==================================================================================================================================================
+
 // Computing grid fragmentation between processes. I expect specific amount of processes
 // 
 void ComputeGridFragmentation (const ProcParams& procParams, int& x_proc_num, int& y_proc_num);
+
+void GetVideoCardProperties (const string& fout_name);
 
 // ==================================================================================================================================================
 //                                                                                                                                               MAIN
@@ -83,17 +75,16 @@ int main (int argc, char** argv){
     try {
         ProcParams procParams (MPI_COMM_WORLD);
 
+        if (procParams.rank == 0)
+            GetVideoCardProperties("Tesla-X2070-TTX.txt");
+
         int x_proc_num = 0;
         int y_proc_num = 0;
         ComputeGridFragmentation (procParams, x_proc_num, y_proc_num);
 
-        if (procParams.rank == 0){
-            #ifdef _OPENMP
-                cout << "OpenMP version " << _OPENMP << ". Max threads= " << omp_get_max_threads() << endl;
-            #endif
-        }
-
-        DHP_PE_RA_FDM_superprac superPrac_2 (grid_size, grid_size, eps);
+        // I expect (procParams.rank % 2) to return different values for processes on one node
+        // This program must be started only assumption, that amount of videocards equals to processes on each node
+        DHP_PE_RA_FDM_superprac superPrac_2 (grid_size, grid_size, eps, procParams.rank % 2);
 
         struct timeval tp;
         gettimeofday(&tp, NULL);
@@ -125,28 +116,6 @@ int main (int argc, char** argv){
 
     MPI_Finalize();
     return 0;
-}
-
-
-// ==================================================================================================================================================
-//                                                                                                                         DHP_PE_RA_FDM_superprac::F
-// ==================================================================================================================================================
-double DHP_PE_RA_FDM_superprac::F (const double x, const double y) const{
-    double t = 1 + x*y;
-    if (t == 0)
-        throw DHP_PE_RA_FDM_Exception("Error computing 'F' function.");
-    return (x*x + y*y)/(t*t);
-}
-
-
-// ==================================================================================================================================================
-//                                                                                                                        DHP_PE_RA_FDM_superprac::fi
-// ==================================================================================================================================================
-double DHP_PE_RA_FDM_superprac::fi (const double x, const double y) const{
-    double t = 1 + x*y;
-    if (t <= 0)
-        throw DHP_PE_RA_FDM_Exception("Error computing 'fi' function.");
-    return std::log(1 + x*y);
 }
 
 
@@ -201,9 +170,52 @@ void DHP_PE_RA_FDM_superprac::Print_p (const string& dout_name) const{
     // fclose(fout);
 }
 
+// ==================================================================================================================================================
+//                                                                                                                             GetVideoCardProperties
+// ==================================================================================================================================================
+void GetVideoCardProperties (const string& fout_name){
+    
+    fstream fout (fout_name.c_str(), fstream::out);
+
+    int deviceNum = 0;
+    SAFE_CUDA(cudaGetDeviceCount(&deviceNum));
+
+    fout << "deviceNum= " << deviceNum << endl;
+
+    if (deviceNum > 0){
+        cudaDeviceProp devProp;
+        SAFE_CUDA(cudaGetDeviceProperties(&devProp, 0));
+
+        fout
+            << "videocard-name= " << devProp.name << endl
+            << "cudaVersion= " << devProp.major << "." << devProp.minor << endl
+            << endl
+            << "multiProcessorCount= " << devProp.multiProcessorCount << endl
+            << "warpSize= " << devProp.warpSize << endl
+            << "maxThreadsPerBlock= " << devProp.maxThreadsPerBlock << endl
+            << "maxGridSize= " << devProp.maxGridSize[0] << " " << devProp.maxGridSize[1] << " " << devProp.maxGridSize[2] << endl
+            << "maxThreadsDim= " << devProp.maxThreadsDim[0] << " " << devProp.maxThreadsDim[1] << " " << devProp.maxThreadsDim[2] << endl
+            << endl
+            << "totalGlobalMem= " << devProp.totalGlobalMem << endl
+            << "totalConstMem= " << devProp.totalConstMem << endl
+            << "sharedMemPerBlock= " << devProp.sharedMemPerBlock << endl
+            << "regsPerBlock= " << devProp.regsPerBlock << endl
+            << endl
+            << "canMapHostMemory= " << devProp.canMapHostMemory << endl
+            << "unifiedAddressing= " << devProp.unifiedAddressing << endl
+            << "computeMode= " << devProp.computeMode << endl
+            << "asyncEngineCount= " << devProp.asyncEngineCount << endl
+            << "concurrentKernels= " << devProp.concurrentKernels << endl
+            << "deviceOverlap= " << devProp.deviceOverlap << endl
+            ;
+    }
+
+    fout.close();
+}
+
 
 // ==================================================================================================================================================
-//                                                                                                                            ComputeGridFragmentation
+//                                                                                                                           ComputeGridFragmentation
 // ==================================================================================================================================================
 void ComputeGridFragmentation (const ProcParams& procParams, int& x_proc_num, int& y_proc_num){
 

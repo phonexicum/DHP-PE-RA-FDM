@@ -7,10 +7,8 @@
 #include <limits>
 #include <iomanip>
 
+
 #include <mpi.h>
-#ifdef _OPENMP
-#include <omp.h>
-#endif
 
 
 #include "DHP_PE_RA_FDM.h"
@@ -26,7 +24,7 @@ using std::max;
 using std::abs;
 
 using std::swap;
-using std::memset;
+// using std::memset;
 
 // ==================================================================================================================================================
 //                                                                                                                       DHP_PE_RA_FDM::DHP_PE_RA_FDM
@@ -88,7 +86,7 @@ ProcComputingCoords::ProcComputingCoords (const ProcParams& procParams, const in
 //                                                                                                                       DHP_PE_RA_FDM::DHP_PE_RA_FDM
 // ==================================================================================================================================================
 DHP_PE_RA_FDM::DHP_PE_RA_FDM (  const double x1, const double y1, const double x2, const double y2, const int grid_size_x_, const int grid_size_y_,
-                                const double eps_, const int descent_step_iterations_):
+                                const double eps_, const int cudaDeviceNum, const int descent_step_iterations_):
 X1(x1), Y1(y1), 
 X2(x2), Y2(y2),
 
@@ -139,6 +137,24 @@ debug_fname (string("debug.txt"))
             fout.close();
         }
     }
+
+    // Setting memory mapping
+    SAFE_CUDA(cudaSetDeviceFlags(cudaDeviceMapHost));
+    SAFE_CUDA(cudaDeviceSetCacheConfig(cudaFuncCachePreferL1));
+
+    SAFE_CUDA(cudaSetDevice(cudaDeviceNum));
+
+    // Checking if device has necessary properties
+    SAFE_CUDA(cudaGetDeviceProperties(&devProp, cudaDeviceNum));
+    if (devProp.canMapHostMemory != 1 and devProp.unifiedAddressing != 1 and devProp.major < 2) {
+        throw DHP_PE_RA_FDM_Exception ("Hardware does not fit this program. CUDA major version must be >= 2,"
+                                       " memory must be able to be mapped and UAD must be enabled.");
+    }
+    if (devProp.maxThreadsPerBlock * devProp.maxGridSize[0] < grid_size_x_ +1 or
+        devProp.maxThreadsPerBlock * devProp.maxGridSize[0] < grid_size_y_ +1 ){
+        throw DHP_PE_RA_FDM_Exception ("Hardware does not fit this program. Device's devProp.maxThreadsPerBlock * devProp.maxGridSize[0]"
+            "can not fit even matrix one row.");
+    }
 }
 
 
@@ -147,34 +163,34 @@ debug_fname (string("debug.txt"))
 // ==================================================================================================================================================
 DHP_PE_RA_FDM::~DHP_PE_RA_FDM (){
     if (p != NULL){
-        delete [] p; p = NULL;
+        SAFE_CUDA(cudaFreeHost(p)); p = NULL;
     }
     if (p_prev != NULL){
-        delete [] p_prev; p_prev = NULL;
+        SAFE_CUDA(cudaFreeHost(p_prev)); p_prev = NULL;
     }
     if (send_message_lr != NULL){
-    delete [] send_message_lr; send_message_lr = NULL;
+        SAFE_CUDA(cudaFreeHost(send_message_lr)); send_message_lr = NULL;
     }
     if (send_message_rl != NULL){
-        delete [] send_message_rl; send_message_rl = NULL;
+        SAFE_CUDA(cudaFreeHost(send_message_rl)); send_message_rl = NULL;
     }
     if (send_message_td != NULL){
-        delete [] send_message_td; send_message_td = NULL;
+        SAFE_CUDA(cudaFreeHost(send_message_td)); send_message_td = NULL;
     }
     if (send_message_bu != NULL){
-        delete [] send_message_bu; send_message_bu = NULL;
+        SAFE_CUDA(cudaFreeHost(send_message_bu)); send_message_bu = NULL;
     }
     if (recv_message_lr != NULL){
-        delete [] recv_message_lr; recv_message_lr = NULL;
+        SAFE_CUDA(cudaFreeHost(recv_message_lr)); recv_message_lr = NULL;
     }
     if (recv_message_rl != NULL){
-        delete [] recv_message_rl; recv_message_rl = NULL;
+        SAFE_CUDA(cudaFreeHost(recv_message_rl)); recv_message_rl = NULL;
     }
     if (recv_message_td != NULL){
-        delete [] recv_message_td; recv_message_td = NULL;
+        SAFE_CUDA(cudaFreeHost(recv_message_td)); recv_message_td = NULL;
     }
     if (recv_message_bu != NULL){
-        delete [] recv_message_bu; recv_message_bu = NULL;
+        SAFE_CUDA(cudaFreeHost(recv_message_bu)); recv_message_bu = NULL;
     }
     if (recv_reqs_5_star != NULL){
         delete [] recv_reqs_5_star; recv_reqs_5_star = NULL;
@@ -227,17 +243,23 @@ void DHP_PE_RA_FDM::Compute (const ProcParams& procParams_in, const int x_proc_n
     procCoords = ProcComputingCoords(procParams, grid_size_x, grid_size_y, x_proc_num, y_proc_num);
 
     if (p != NULL)
-        delete [] p; p = NULL;
+        SAFE_CUDA(cudaFreeHost(p)); p = NULL;
     if (p_prev != NULL)
-        delete [] p_prev; p_prev = NULL;
+        SAFE_CUDA(cudaFreeHost(p_prev)); p_prev = NULL;
 
-    p = new double [procCoords.x_cells_num * procCoords.y_cells_num];
-    p_prev = new double [procCoords.x_cells_num * procCoords.y_cells_num];
-    double* g = new double [procCoords.x_cells_num * procCoords.y_cells_num];
-    double* r = new double [procCoords.x_cells_num * procCoords.y_cells_num];
-    double* delta_p = new double [procCoords.x_cells_num * procCoords.y_cells_num];
-    double* delta_g = new double [procCoords.x_cells_num * procCoords.y_cells_num];
-    double* delta_r = new double [procCoords.x_cells_num * procCoords.y_cells_num];
+    double* g = NULL;
+    double* r = NULL;
+    double* delta_p = NULL;
+    double* delta_g = NULL;
+    double* delta_r = NULL;
+    
+    SAFE_CUDA(cudaHostAlloc(&p,       procCoords.x_cells_num * procCoords.y_cells_num * sizeof(*p),       cudaHostAllocMapped));
+    SAFE_CUDA(cudaHostAlloc(&p_prev,  procCoords.x_cells_num * procCoords.y_cells_num * sizeof(*p_prev),  cudaHostAllocMapped));
+    SAFE_CUDA(cudaHostAlloc(&g,       procCoords.x_cells_num * procCoords.y_cells_num * sizeof(*g),       cudaHostAllocMapped));
+    SAFE_CUDA(cudaHostAlloc(&r,       procCoords.x_cells_num * procCoords.y_cells_num * sizeof(*r),       cudaHostAllocMapped));
+    SAFE_CUDA(cudaHostAlloc(&delta_p, procCoords.x_cells_num * procCoords.y_cells_num * sizeof(*delta_p), cudaHostAllocMapped));
+    SAFE_CUDA(cudaHostAlloc(&delta_g, procCoords.x_cells_num * procCoords.y_cells_num * sizeof(*delta_g), cudaHostAllocMapped));
+    SAFE_CUDA(cudaHostAlloc(&delta_r, procCoords.x_cells_num * procCoords.y_cells_num * sizeof(*delta_r), cudaHostAllocMapped));
 
     double scalar_product_delta_g_and_g = 1;
     double scalar_product_delta_r_and_g = 1;
@@ -245,7 +267,8 @@ void DHP_PE_RA_FDM::Compute (const ProcParams& procParams_in, const int x_proc_n
     double tau = 0;
 
     // Computing step 1
-    Initialize_P_and_Pprev();
+    // Initialize_P_and_Pprev();
+    cuda_Initialize_P_and_Pprev ();
     Dump_func(debug_fname, p_prev, "p_prev");
 
 
@@ -325,11 +348,11 @@ void DHP_PE_RA_FDM::Compute (const ProcParams& procParams_in, const int x_proc_n
         iterations_counter++;
     }
 
-    delete [] g; g = NULL;
-    delete [] r; r = NULL;
-    delete [] delta_p; delta_p = NULL;
-    delete [] delta_g; delta_g = NULL;
-    delete [] delta_r; delta_r = NULL;
+    SAFE_CUDA(cudaFreeHost(g)); g = NULL;
+    SAFE_CUDA(cudaFreeHost(r)); r = NULL;
+    SAFE_CUDA(cudaFreeHost(delta_p)); delta_p = NULL;
+    SAFE_CUDA(cudaFreeHost(delta_g)); delta_g = NULL;
+    SAFE_CUDA(cudaFreeHost(delta_r)); delta_r = NULL;
 }
 
 
@@ -339,14 +362,9 @@ void DHP_PE_RA_FDM::Compute (const ProcParams& procParams_in, const int x_proc_n
 double DHP_PE_RA_FDM::ComputingScalarProduct(const double* const f, const double* const delta_f){
 
     double scalar_product = 0;
-    #pragma omp parallel
-    {
-        // #pragma omp for schedule (static) reduction(+:scalar_product) collapse (2)
-        #pragma omp for schedule (static) reduction(+:scalar_product)
-        for (int j = 0; j < procCoords.y_cells_num; j++){
-            for (int i = 0; i < procCoords.x_cells_num; i++){
-                scalar_product += hx * hy * f[j * procCoords.x_cells_num + i] * delta_f[j * procCoords.x_cells_num + i];
-            }
+    for (int j = 0; j < procCoords.y_cells_num; j++){
+        for (int i = 0; i < procCoords.x_cells_num; i++){
+            scalar_product += hx * hy * f[j * procCoords.x_cells_num + i] * delta_f[j * procCoords.x_cells_num + i];
         }
     }
 
@@ -371,28 +389,9 @@ double DHP_PE_RA_FDM::ComputingScalarProduct(const double* const f, const double
 // ==================================================================================================================================================
 bool DHP_PE_RA_FDM::StopCriteria(const double* const f1, const double* const f2){
 
-    // double norm = 0;
-    // #pragma omp parallel reduction(max:norm)
-    // {
-    //     #pragma omp for schedule (static)
-    //     for (int i = 0; i < procCoords.x_cells_num * procCoords.y_cells_num; i++){
-    //         norm = max(norm, abs(f1[i] - f2[i]));
-    //     }
-    // }
-
     double norm = 0;
-    double priv_norm = 0;
-    #pragma omp parallel firstprivate (priv_norm)
-    {
-        #pragma omp for schedule (static)
-        for (int i = 0; i < procCoords.x_cells_num * procCoords.y_cells_num; i++){
-            priv_norm = max(priv_norm, abs(f1[i] - f2[i]));
-        }
-
-        #pragma omp critical
-        {
-            norm = max(priv_norm, norm);
-        }
+    for (int i = 0; i < procCoords.x_cells_num * procCoords.y_cells_num; i++){
+        norm = max(norm, abs(f1[i] - f2[i]));
     }
 
     double global_norm = 0;
@@ -420,20 +419,15 @@ void DHP_PE_RA_FDM::Counting_5_star (const double* const f, double* const delta_
     int j = 0;
     int ret = MPI_SUCCESS;
 
-    #pragma omp parallel
-    {
-        // #pragma omp for schedule (static) collapse (2)
-        #pragma omp for schedule (static) private(i)
-        for (j = 1; j < procCoords.y_cells_num -1; j++){
-            for (i = 1; i < procCoords.x_cells_num -1; i++){
-                delta_f[j * procCoords.x_cells_num + i] = (
-                        (f[j * procCoords.x_cells_num + i  ] - f[j * procCoords.x_cells_num + i-1]) / hx -
-                        (f[j * procCoords.x_cells_num + i+1] - f[j * procCoords.x_cells_num + i  ]) / hx
-                    ) / hx + (
-                        (f[ j    * procCoords.x_cells_num + i] - f[(j-1) * procCoords.x_cells_num + i]) / hy -
-                        (f[(j+1) * procCoords.x_cells_num + i] - f[ j    * procCoords.x_cells_num + i]) / hy
-                    ) / hy;
-            }
+    for (j = 1; j < procCoords.y_cells_num -1; j++){
+        for (i = 1; i < procCoords.x_cells_num -1; i++){
+            delta_f[j * procCoords.x_cells_num + i] = (
+                    (f[j * procCoords.x_cells_num + i  ] - f[j * procCoords.x_cells_num + i-1]) / hx -
+                    (f[j * procCoords.x_cells_num + i+1] - f[j * procCoords.x_cells_num + i  ]) / hx
+                ) / hx + (
+                    (f[ j    * procCoords.x_cells_num + i] - f[(j-1) * procCoords.x_cells_num + i]) / hy -
+                    (f[(j+1) * procCoords.x_cells_num + i] - f[ j    * procCoords.x_cells_num + i]) / hy
+                ) / hy;
         }
     }
 
@@ -442,202 +436,184 @@ void DHP_PE_RA_FDM::Counting_5_star (const double* const f, double* const delta_
     // ==========================================
 
     if (send_message_lr == NULL)
-        send_message_lr = new double [max(procCoords.x_cells_num, procCoords.y_cells_num)];
+        SAFE_CUDA(cudaHostAlloc(&send_message_lr, procCoords.y_cells_num * sizeof(*send_message_lr), cudaHostAllocMapped));
     if (send_message_rl == NULL)
-        send_message_rl = new double [max(procCoords.x_cells_num, procCoords.y_cells_num)];
+        SAFE_CUDA(cudaHostAlloc(&send_message_rl, procCoords.y_cells_num * sizeof(*send_message_rl), cudaHostAllocMapped));
     if (send_message_td == NULL)
-        send_message_td = new double [max(procCoords.x_cells_num, procCoords.y_cells_num)];
+        SAFE_CUDA(cudaHostAlloc(&send_message_td, procCoords.x_cells_num * sizeof(*send_message_td), cudaHostAllocMapped));
     if (send_message_bu == NULL)
-        send_message_bu = new double [max(procCoords.x_cells_num, procCoords.y_cells_num)];
+        SAFE_CUDA(cudaHostAlloc(&send_message_bu, procCoords.x_cells_num * sizeof(*send_message_bu), cudaHostAllocMapped));
     if (recv_message_lr == NULL)
-        recv_message_lr = new double [max(procCoords.x_cells_num, procCoords.y_cells_num)];
+        SAFE_CUDA(cudaHostAlloc(&recv_message_lr, procCoords.y_cells_num * sizeof(*recv_message_lr), cudaHostAllocMapped));
     if (recv_message_rl == NULL)
-        recv_message_rl = new double [max(procCoords.x_cells_num, procCoords.y_cells_num)];
+        SAFE_CUDA(cudaHostAlloc(&recv_message_rl, procCoords.y_cells_num * sizeof(*recv_message_rl), cudaHostAllocMapped));
     if (recv_message_td == NULL)
-        recv_message_td = new double [max(procCoords.x_cells_num, procCoords.y_cells_num)];
+        SAFE_CUDA(cudaHostAlloc(&recv_message_td, procCoords.x_cells_num * sizeof(*recv_message_td), cudaHostAllocMapped));
     if (recv_message_bu == NULL)
-        recv_message_bu = new double [max(procCoords.x_cells_num, procCoords.y_cells_num)];
+        SAFE_CUDA(cudaHostAlloc(&recv_message_bu, procCoords.x_cells_num * sizeof(*recv_message_bu), cudaHostAllocMapped));
 
     // ==========================================
     // initialize send buffers
     // ==========================================
 
-    #pragma omp sections private(i, j)
-    {
-        // left -> right
-        #pragma omp section
-        for (j = 0; j < procCoords.y_cells_num; j++){
-            send_message_lr[j] = f[ (j+1) * procCoords.x_cells_num -1];
-        }
-        // right -> left
-        #pragma omp section
-        for (j = 0; j < procCoords.y_cells_num; j++){
-            send_message_rl[j] = f[ j * procCoords.x_cells_num + 0];
-        }
-        // top -> down
-        #pragma omp section
-        for (i = 0; i < procCoords.x_cells_num; i++){
-            send_message_td[i] = f[ (procCoords.y_cells_num -1) * procCoords.x_cells_num + i];
-        }
-        // bottom -> up
-        #pragma omp section
-        for (i = 0; i < procCoords.x_cells_num; i++){
-            send_message_bu[i] = f[i];
-        }
+    // left -> right
+    for (j = 0; j < procCoords.y_cells_num; j++){
+        send_message_lr[j] = f[ (j+1) * procCoords.x_cells_num -1];
+    }
+    // right -> left
+    for (j = 0; j < procCoords.y_cells_num; j++){
+        send_message_rl[j] = f[ j * procCoords.x_cells_num + 0];
+    }
+    // top -> down
+    for (i = 0; i < procCoords.x_cells_num; i++){
+        send_message_td[i] = f[ (procCoords.y_cells_num -1) * procCoords.x_cells_num + i];
+    }
+    // bottom -> up
+    for (i = 0; i < procCoords.x_cells_num; i++){
+        send_message_bu[i] = f[i];
     }
 
 
     int send_amount = 0;
     int recv_amount = 0;
 
-    #pragma omp sections
-    {
-        // ==========================================
-        // send messages
-        // ==========================================
-        #pragma omp section
-        {
+    // ==========================================
+    // send messages
+    // ==========================================
 
-            // left -> right
-            if (not procCoords.right){
+    // left -> right
+    if (not procCoords.right){
 
-                ret = MPI_Isend(
-                    send_message_lr,                            // void* buffer
-                    procCoords.y_cells_num,                     // int count
-                    MPI_DOUBLE,                                 // MPI_Datatype datatype
-                    procParams.rank +1,                         // int dest
-                    DHP_PE_RA_FDM::StarLeftRight,               // int tag
-                    procParams.comm,                            // MPI_Comm comm
-                    &(send_reqs_5_star[send_amount])            // MPI_Request *request
-                );
-                send_amount++;
+        ret = MPI_Isend(
+            send_message_lr,                            // void* buffer
+            procCoords.y_cells_num,                     // int count
+            MPI_DOUBLE,                                 // MPI_Datatype datatype
+            procParams.rank +1,                         // int dest
+            DHP_PE_RA_FDM::StarLeftRight,               // int tag
+            procParams.comm,                            // MPI_Comm comm
+            &(send_reqs_5_star[send_amount])            // MPI_Request *request
+        );
+        send_amount++;
 
-                if (ret != MPI_SUCCESS) throw DHP_PE_RA_FDM_Exception("Error sending message from left to right.");
-            }
-            // right -> left
-            if (not procCoords.left){
+        if (ret != MPI_SUCCESS) throw DHP_PE_RA_FDM_Exception("Error sending message from left to right.");
+    }
+    // right -> left
+    if (not procCoords.left){
 
-                ret = MPI_Isend(
-                    send_message_rl,                            // void* buffer
-                    procCoords.y_cells_num,                     // int count
-                    MPI_DOUBLE,                                 // MPI_Datatype datatype
-                    procParams.rank -1,                         // int dest
-                    DHP_PE_RA_FDM::StarRightLeft,               // int tag
-                    procParams.comm,                            // MPI_Comm comm
-                    &(send_reqs_5_star[send_amount])            // MPI_Request *request
-                );
-                send_amount++;
+        ret = MPI_Isend(
+            send_message_rl,                            // void* buffer
+            procCoords.y_cells_num,                     // int count
+            MPI_DOUBLE,                                 // MPI_Datatype datatype
+            procParams.rank -1,                         // int dest
+            DHP_PE_RA_FDM::StarRightLeft,               // int tag
+            procParams.comm,                            // MPI_Comm comm
+            &(send_reqs_5_star[send_amount])            // MPI_Request *request
+        );
+        send_amount++;
 
-                if (ret != MPI_SUCCESS) throw DHP_PE_RA_FDM_Exception("Error sending message from right to left.");
-            }
-            // top -> down
-            if (not procCoords.bottom){
+        if (ret != MPI_SUCCESS) throw DHP_PE_RA_FDM_Exception("Error sending message from right to left.");
+    }
+    // top -> down
+    if (not procCoords.bottom){
 
-                ret = MPI_Isend(
-                    send_message_td,                            // void* buffer
-                    procCoords.x_cells_num,                     // int count
-                    MPI_DOUBLE,                                 // MPI_Datatype datatype
-                    procParams.rank + procCoords.x_proc_num,    // int dest
-                    DHP_PE_RA_FDM::StarTopDown,                 // int tag
-                    procParams.comm,                            // MPI_Comm comm
-                    &(send_reqs_5_star[send_amount])            // MPI_Request *request
-                );
-                send_amount++;
+        ret = MPI_Isend(
+            send_message_td,                            // void* buffer
+            procCoords.x_cells_num,                     // int count
+            MPI_DOUBLE,                                 // MPI_Datatype datatype
+            procParams.rank + procCoords.x_proc_num,    // int dest
+            DHP_PE_RA_FDM::StarTopDown,                 // int tag
+            procParams.comm,                            // MPI_Comm comm
+            &(send_reqs_5_star[send_amount])            // MPI_Request *request
+        );
+        send_amount++;
 
-                if (ret != MPI_SUCCESS) throw DHP_PE_RA_FDM_Exception("Error sending message top -> down.");
-            }
-            // bottom -> up
-            if (not procCoords.top){
+        if (ret != MPI_SUCCESS) throw DHP_PE_RA_FDM_Exception("Error sending message top -> down.");
+    }
+    // bottom -> up
+    if (not procCoords.top){
 
-                ret = MPI_Isend(
-                    send_message_bu,                            // void* buffer
-                    procCoords.x_cells_num,                     // int count
-                    MPI_DOUBLE,                                 // MPI_Datatype datatype
-                    procParams.rank - procCoords.x_proc_num,    // int dest
-                    DHP_PE_RA_FDM::StarBottomUp,                // int tag
-                    procParams.comm,                            // MPI_Comm comm
-                    &(send_reqs_5_star[send_amount])            // MPI_Request *request
-                );
-                send_amount++;
+        ret = MPI_Isend(
+            send_message_bu,                            // void* buffer
+            procCoords.x_cells_num,                     // int count
+            MPI_DOUBLE,                                 // MPI_Datatype datatype
+            procParams.rank - procCoords.x_proc_num,    // int dest
+            DHP_PE_RA_FDM::StarBottomUp,                // int tag
+            procParams.comm,                            // MPI_Comm comm
+            &(send_reqs_5_star[send_amount])            // MPI_Request *request
+        );
+        send_amount++;
 
-                if (ret != MPI_SUCCESS) throw DHP_PE_RA_FDM_Exception("Error sending message bottom -> up.");
-            }
-        } // #pragma omp section
+        if (ret != MPI_SUCCESS) throw DHP_PE_RA_FDM_Exception("Error sending message bottom -> up.");
+    }
 
+    // ==========================================
+    // receive messages
+    // ==========================================
 
-        // ==========================================
-        // receive messages
-        // ==========================================
-        #pragma omp section
-        {
+    // left -> right
+    if (not procCoords.left){
 
-            // left -> right
-            if (not procCoords.left){
+        ret = MPI_Irecv(
+            recv_message_lr,                            // void *buf
+            procCoords.y_cells_num,                     // int count
+            MPI_DOUBLE,                                 // MPI_Datatype datatype
+            procParams.rank -1,                         // int source
+            DHP_PE_RA_FDM::StarLeftRight,               // int tag
+            procParams.comm,                            // MPI_Comm comm
+            &(recv_reqs_5_star[recv_amount])            // MPI_Request *request
+        );
+        recv_amount++;
 
-                ret = MPI_Irecv(
-                    recv_message_lr,                            // void *buf
-                    procCoords.y_cells_num,                     // int count
-                    MPI_DOUBLE,                                 // MPI_Datatype datatype
-                    procParams.rank -1,                         // int source
-                    DHP_PE_RA_FDM::StarLeftRight,               // int tag
-                    procParams.comm,                            // MPI_Comm comm
-                    &(recv_reqs_5_star[recv_amount])            // MPI_Request *request
-                );
-                recv_amount++;
+        if (ret != MPI_SUCCESS) throw DHP_PE_RA_FDM_Exception("Error receiving message from left to right.");
+    }
+    // right -> left
+    if (not procCoords.right){
 
-                if (ret != MPI_SUCCESS) throw DHP_PE_RA_FDM_Exception("Error receiving message from left to right.");
-            }
-            // right -> left
-            if (not procCoords.right){
+        ret = MPI_Irecv(
+            recv_message_rl,                            // void *buf
+            procCoords.y_cells_num,                     // int count
+            MPI_DOUBLE,                                 // MPI_Datatype datatype
+            procParams.rank +1,                         // int source
+            DHP_PE_RA_FDM::StarRightLeft,               // int tag
+            procParams.comm,                            // MPI_Comm comm
+            &(recv_reqs_5_star[recv_amount])            // MPI_Request *request
+        );
+        recv_amount++;
 
-                ret = MPI_Irecv(
-                    recv_message_rl,                            // void *buf
-                    procCoords.y_cells_num,                     // int count
-                    MPI_DOUBLE,                                 // MPI_Datatype datatype
-                    procParams.rank +1,                         // int source
-                    DHP_PE_RA_FDM::StarRightLeft,               // int tag
-                    procParams.comm,                            // MPI_Comm comm
-                    &(recv_reqs_5_star[recv_amount])            // MPI_Request *request
-                );
-                recv_amount++;
+        if (ret != MPI_SUCCESS) throw DHP_PE_RA_FDM_Exception("Error receiving message from right to left.");
+    }
+    // top -> down
+    if (not procCoords.top){
 
-                if (ret != MPI_SUCCESS) throw DHP_PE_RA_FDM_Exception("Error receiving message from right to left.");
-            }
-            // top -> down
-            if (not procCoords.top){
+        ret = MPI_Irecv(
+            recv_message_td,                            // void *buf
+            procCoords.x_cells_num,                     // int count
+            MPI_DOUBLE,                                 // MPI_Datatype datatype
+            procParams.rank - procCoords.x_proc_num,    // int source
+            DHP_PE_RA_FDM::StarTopDown,                 // int tag
+            procParams.comm,                            // MPI_Comm comm
+            &(recv_reqs_5_star[recv_amount])            // MPI_Request *request
+        );
+        recv_amount++;
 
-                ret = MPI_Irecv(
-                    recv_message_td,                            // void *buf
-                    procCoords.x_cells_num,                     // int count
-                    MPI_DOUBLE,                                 // MPI_Datatype datatype
-                    procParams.rank - procCoords.x_proc_num,    // int source
-                    DHP_PE_RA_FDM::StarTopDown,                 // int tag
-                    procParams.comm,                            // MPI_Comm comm
-                    &(recv_reqs_5_star[recv_amount])            // MPI_Request *request
-                );
-                recv_amount++;
+        if (ret != MPI_SUCCESS) throw DHP_PE_RA_FDM_Exception("Error receiving message top -> down.");
+    }
+    // bottom -> up
+    if (not procCoords.bottom){
 
-                if (ret != MPI_SUCCESS) throw DHP_PE_RA_FDM_Exception("Error receiving message top -> down.");
-            }
-            // bottom -> up
-            if (not procCoords.bottom){
+        ret = MPI_Irecv(
+            recv_message_bu,                            // void *buf
+            procCoords.x_cells_num,                     // int count
+            MPI_DOUBLE,                                 // MPI_Datatype datatype
+            procParams.rank + procCoords.x_proc_num,    // int source
+            DHP_PE_RA_FDM::StarBottomUp,                // int tag
+            procParams.comm,                            // MPI_Comm comm
+            &(recv_reqs_5_star[recv_amount])            // MPI_Request *request
+        );
+        recv_amount++;
 
-                ret = MPI_Irecv(
-                    recv_message_bu,                            // void *buf
-                    procCoords.x_cells_num,                     // int count
-                    MPI_DOUBLE,                                 // MPI_Datatype datatype
-                    procParams.rank + procCoords.x_proc_num,    // int source
-                    DHP_PE_RA_FDM::StarBottomUp,                // int tag
-                    procParams.comm,                            // MPI_Comm comm
-                    &(recv_reqs_5_star[recv_amount])            // MPI_Request *request
-                );
-                recv_amount++;
-
-                if (ret != MPI_SUCCESS) throw DHP_PE_RA_FDM_Exception("Error receiving message bottom -> up.");
-            }
-        } // #pragma omp section
-
-    } // #pragma omp sections
+        if (ret != MPI_SUCCESS) throw DHP_PE_RA_FDM_Exception("Error receiving message bottom -> up.");
+    }
 
     // ==========================================
     // wait receiving all messages
@@ -661,104 +637,72 @@ void DHP_PE_RA_FDM::Counting_5_star (const double* const f, double* const delta_
         // left -> right
         i = 0;
         if (not procCoords.left) {
-            #pragma omp parallel
-            {
-                #pragma omp for schedule (static)
-                for (j = 1; j < procCoords.y_cells_num -1; j++){
-                    delta_f[j * procCoords.x_cells_num + i] = (
-                            (f[j * procCoords.x_cells_num + i  ] - recv_message_lr[j]               ) / hx -
-                            (f[j * procCoords.x_cells_num + i+1] - f[j * procCoords.x_cells_num + i]) / hx
-                        ) / hx + (
-                            (f[ j    * procCoords.x_cells_num + i] - f[(j-1) * procCoords.x_cells_num + i]) / hy -
-                            (f[(j+1) * procCoords.x_cells_num + i] - f[ j    * procCoords.x_cells_num + i]) / hy
-                        ) / hy;
-                }
+            for (j = 1; j < procCoords.y_cells_num -1; j++){
+                delta_f[j * procCoords.x_cells_num + i] = (
+                        (f[j * procCoords.x_cells_num + i  ] - recv_message_lr[j]               ) / hx -
+                        (f[j * procCoords.x_cells_num + i+1] - f[j * procCoords.x_cells_num + i]) / hx
+                    ) / hx + (
+                        (f[ j    * procCoords.x_cells_num + i] - f[(j-1) * procCoords.x_cells_num + i]) / hy -
+                        (f[(j+1) * procCoords.x_cells_num + i] - f[ j    * procCoords.x_cells_num + i]) / hy
+                    ) / hy;
             }
         } else {
-            #pragma omp parallel
-            {
-                #pragma omp for schedule (static)
-                for (j = 1; j < procCoords.y_cells_num -1; j++){
-                    delta_f[j * procCoords.x_cells_num + i] = 0;
-                }
+            for (j = 1; j < procCoords.y_cells_num -1; j++){
+                delta_f[j * procCoords.x_cells_num + i] = 0;
             }
         }
 
         // right -> left
         i = procCoords.x_cells_num -1;
         if (not procCoords.right) {
-            #pragma omp parallel
-            {
-                #pragma omp for schedule (static)
-                for (j = 1; j < procCoords.y_cells_num -1; j++){
-                    delta_f[j * procCoords.x_cells_num + i] = (
-                            (f[j * procCoords.x_cells_num + i  ] - f[j * procCoords.x_cells_num + i-1]) / hx -
-                            (recv_message_rl[j]                  - f[j * procCoords.x_cells_num + i  ]) / hx
-                        ) / hx + (
-                            (f[ j    * procCoords.x_cells_num + i] - f[(j-1) * procCoords.x_cells_num + i]) / hy -
-                            (f[(j+1) * procCoords.x_cells_num + i] - f[ j    * procCoords.x_cells_num + i]) / hy
-                        ) / hy;
-                }
+            for (j = 1; j < procCoords.y_cells_num -1; j++){
+                delta_f[j * procCoords.x_cells_num + i] = (
+                        (f[j * procCoords.x_cells_num + i  ] - f[j * procCoords.x_cells_num + i-1]) / hx -
+                        (recv_message_rl[j]                  - f[j * procCoords.x_cells_num + i  ]) / hx
+                    ) / hx + (
+                        (f[ j    * procCoords.x_cells_num + i] - f[(j-1) * procCoords.x_cells_num + i]) / hy -
+                        (f[(j+1) * procCoords.x_cells_num + i] - f[ j    * procCoords.x_cells_num + i]) / hy
+                    ) / hy;
             }
         } else {
-            #pragma omp parallel
-            {
-                #pragma omp for schedule (static)
-                for (j = 1; j < procCoords.y_cells_num -1; j++){
-                    delta_f[j * procCoords.x_cells_num + i] = 0;
-                }
+            for (j = 1; j < procCoords.y_cells_num -1; j++){
+                delta_f[j * procCoords.x_cells_num + i] = 0;
             }
         }
 
         // top -> down
         j = 0;
         if (not procCoords.top) {
-            #pragma omp parallel
-            {
-                #pragma omp for schedule (static)
-                for (i = 1; i < procCoords.x_cells_num -1; i++){
-                    delta_f[j * procCoords.x_cells_num + i] = (
-                            (f[j * procCoords.x_cells_num + i  ] - f[j * procCoords.x_cells_num + i-1]) / hx -
-                            (f[j * procCoords.x_cells_num + i+1] - f[j * procCoords.x_cells_num + i  ]) / hx
-                        ) / hx + (
-                            (f[ j    * procCoords.x_cells_num + i] - recv_message_td[i]               ) / hy -
-                            (f[(j+1) * procCoords.x_cells_num + i] - f[j * procCoords.x_cells_num + i]) / hy
-                        ) / hy;
-                }
+            for (i = 1; i < procCoords.x_cells_num -1; i++){
+                delta_f[j * procCoords.x_cells_num + i] = (
+                        (f[j * procCoords.x_cells_num + i  ] - f[j * procCoords.x_cells_num + i-1]) / hx -
+                        (f[j * procCoords.x_cells_num + i+1] - f[j * procCoords.x_cells_num + i  ]) / hx
+                    ) / hx + (
+                        (f[ j    * procCoords.x_cells_num + i] - recv_message_td[i]               ) / hy -
+                        (f[(j+1) * procCoords.x_cells_num + i] - f[j * procCoords.x_cells_num + i]) / hy
+                    ) / hy;
             }
         } else {
-            #pragma omp parallel
-            {
-                #pragma omp for schedule (static)
-                for (i = 1; i < procCoords.x_cells_num -1; i++){
-                    delta_f[j * procCoords.x_cells_num + i] = 0;
-                }
+            for (i = 1; i < procCoords.x_cells_num -1; i++){
+                delta_f[j * procCoords.x_cells_num + i] = 0;
             }
         }
 
         // bottom -> up
         j = procCoords.y_cells_num -1;
         if (not procCoords.bottom) {
-            #pragma omp parallel
-            {
-                #pragma omp for schedule (static)
-                for (i = 1; i < procCoords.x_cells_num -1; i++){
-                    delta_f[j * procCoords.x_cells_num + i] = (
-                            (f[j * procCoords.x_cells_num + i  ] - f[j * procCoords.x_cells_num + i-1]) / hx -
-                            (f[j * procCoords.x_cells_num + i+1] - f[j * procCoords.x_cells_num + i  ]) / hx
-                        ) / hx + (
-                            (f[ j    * procCoords.x_cells_num + i] - f[(j-1) * procCoords.x_cells_num + i]) / hy -
-                            (recv_message_bu[i]                    - f[ j    * procCoords.x_cells_num + i]) / hy
-                        ) / hy;
-                }
+            for (i = 1; i < procCoords.x_cells_num -1; i++){
+                delta_f[j * procCoords.x_cells_num + i] = (
+                        (f[j * procCoords.x_cells_num + i  ] - f[j * procCoords.x_cells_num + i-1]) / hx -
+                        (f[j * procCoords.x_cells_num + i+1] - f[j * procCoords.x_cells_num + i  ]) / hx
+                    ) / hx + (
+                        (f[ j    * procCoords.x_cells_num + i] - f[(j-1) * procCoords.x_cells_num + i]) / hy -
+                        (recv_message_bu[i]                    - f[ j    * procCoords.x_cells_num + i]) / hy
+                    ) / hy;
             }
         } else {
-            #pragma omp parallel
-            {
-                #pragma omp for schedule (static)
-                for (i = 1; i < procCoords.x_cells_num -1; i++){
-                    delta_f[j * procCoords.x_cells_num + i] = 0;
-                }
+            for (i = 1; i < procCoords.x_cells_num -1; i++){
+                delta_f[j * procCoords.x_cells_num + i] = 0;
             }
         }
 
@@ -766,76 +710,61 @@ void DHP_PE_RA_FDM::Counting_5_star (const double* const f, double* const delta_
         // Counting delta_f's corners
         // ==========================================
 
-        #pragma omp sections private(i, j)
-        {
-            #pragma omp section
-            {
-                j = 0;
-                i = 0;
-                if (not procCoords.top and not procCoords.left) {
-                    delta_f[j * procCoords.x_cells_num + i] = (
-                            (f[j * procCoords.x_cells_num + i  ] - recv_message_lr [0] ) / hx -
-                            (f[j * procCoords.x_cells_num + i+1] - f[j * procCoords.x_cells_num + i  ]) / hx
-                        ) / hx + (
-                            (f[ j    * procCoords.x_cells_num + i] - recv_message_td [0]                  ) / hy -
-                            (f[(j+1) * procCoords.x_cells_num + i] - f[ j    * procCoords.x_cells_num + i]) / hy
-                        ) / hy;
-                } else {
-                    delta_f[j * procCoords.x_cells_num + i] = 0;
-                }
-            }
+        j = 0;
+        i = 0;
+        if (not procCoords.top and not procCoords.left) {
+            delta_f[j * procCoords.x_cells_num + i] = (
+                    (f[j * procCoords.x_cells_num + i  ] - recv_message_lr [0] ) / hx -
+                    (f[j * procCoords.x_cells_num + i+1] - f[j * procCoords.x_cells_num + i  ]) / hx
+                ) / hx + (
+                    (f[ j    * procCoords.x_cells_num + i] - recv_message_td [0]                  ) / hy -
+                    (f[(j+1) * procCoords.x_cells_num + i] - f[ j    * procCoords.x_cells_num + i]) / hy
+                ) / hy;
+        } else {
+            delta_f[j * procCoords.x_cells_num + i] = 0;
+        }
 
-            #pragma omp section
-            {
-                j = 0;
-                i = procCoords.x_cells_num -1;
-                if (not procCoords.top and not procCoords.right){
-                    delta_f[j * procCoords.x_cells_num + i] = (
-                            (f[j * procCoords.x_cells_num + i  ] - f[j * procCoords.x_cells_num + i-1]) / hx -
-                            (recv_message_rl [0]                 - f[j * procCoords.x_cells_num + i  ]) / hx
-                        ) / hx + (
-                            (f[ j    * procCoords.x_cells_num + i] - recv_message_td [procCoords.x_cells_num -1] ) / hy -
-                            (f[(j+1) * procCoords.x_cells_num + i] - f[ j    * procCoords.x_cells_num + i]) / hy
-                        ) / hy;
-                } else {
-                    delta_f[j * procCoords.x_cells_num + i] = 0;
-                }
-            }
+        j = 0;
+        i = procCoords.x_cells_num -1;
+        if (not procCoords.top and not procCoords.right){
+            delta_f[j * procCoords.x_cells_num + i] = (
+                    (f[j * procCoords.x_cells_num + i  ] - f[j * procCoords.x_cells_num + i-1]) / hx -
+                    (recv_message_rl [0]                 - f[j * procCoords.x_cells_num + i  ]) / hx
+                ) / hx + (
+                    (f[ j    * procCoords.x_cells_num + i] - recv_message_td [procCoords.x_cells_num -1] ) / hy -
+                    (f[(j+1) * procCoords.x_cells_num + i] - f[ j    * procCoords.x_cells_num + i]) / hy
+                ) / hy;
+        } else {
+            delta_f[j * procCoords.x_cells_num + i] = 0;
+        }
 
-            #pragma omp section
-            {
-                j = procCoords.y_cells_num -1;
-                i = 0;
-                if (not procCoords.bottom and not procCoords.left){
-                    delta_f[j * procCoords.x_cells_num + i] = (
-                            (f[j * procCoords.x_cells_num + i  ] - recv_message_lr[procCoords.y_cells_num -1] ) / hx -
-                            (f[j * procCoords.x_cells_num + i+1] - f[j * procCoords.x_cells_num + i  ]) / hx
-                        ) / hx + (
-                            (f[ j    * procCoords.x_cells_num + i] - f[(j-1) * procCoords.x_cells_num + i]) / hy -
-                            (recv_message_bu [0]                   - f[ j    * procCoords.x_cells_num + i]) / hy
-                        ) / hy;
-                } else {
-                    delta_f[j * procCoords.x_cells_num + i] = 0;
-                }
-            }
+        j = procCoords.y_cells_num -1;
+        i = 0;
+        if (not procCoords.bottom and not procCoords.left){
+            delta_f[j * procCoords.x_cells_num + i] = (
+                    (f[j * procCoords.x_cells_num + i  ] - recv_message_lr[procCoords.y_cells_num -1] ) / hx -
+                    (f[j * procCoords.x_cells_num + i+1] - f[j * procCoords.x_cells_num + i  ]) / hx
+                ) / hx + (
+                    (f[ j    * procCoords.x_cells_num + i] - f[(j-1) * procCoords.x_cells_num + i]) / hy -
+                    (recv_message_bu [0]                   - f[ j    * procCoords.x_cells_num + i]) / hy
+                ) / hy;
+        } else {
+            delta_f[j * procCoords.x_cells_num + i] = 0;
+        }
 
-            #pragma omp section
-            {
-                j = procCoords.y_cells_num -1;
-                i = procCoords.x_cells_num -1;
-                if (not procCoords.bottom and not procCoords.right){
-                    delta_f[j * procCoords.x_cells_num + i] = (
-                            (f[j * procCoords.x_cells_num + i  ] - f[j * procCoords.x_cells_num + i-1]) / hx -
-                            (recv_message_rl [procCoords.y_cells_num -1] - f[j * procCoords.x_cells_num + i  ]) / hx
-                        ) / hx + (
-                            (f[ j    * procCoords.x_cells_num + i] - f[(j-1) * procCoords.x_cells_num + i]) / hy -
-                            (recv_message_bu [procCoords.x_cells_num -1] - f[ j    * procCoords.x_cells_num + i]) / hy
-                        ) / hy;
-                } else {
-                    delta_f[j * procCoords.x_cells_num + i] = 0;
-                }
-            }
-        } // #pragma omp sections
+        j = procCoords.y_cells_num -1;
+        i = procCoords.x_cells_num -1;
+        if (not procCoords.bottom and not procCoords.right){
+            delta_f[j * procCoords.x_cells_num + i] = (
+                    (f[j * procCoords.x_cells_num + i  ] - f[j * procCoords.x_cells_num + i-1]) / hx -
+                    (recv_message_rl [procCoords.y_cells_num -1] - f[j * procCoords.x_cells_num + i  ]) / hx
+                ) / hx + (
+                    (f[ j    * procCoords.x_cells_num + i] - f[(j-1) * procCoords.x_cells_num + i]) / hy -
+                    (recv_message_bu [procCoords.x_cells_num -1] - f[ j    * procCoords.x_cells_num + i]) / hy
+                ) / hy;
+        } else {
+            delta_f[j * procCoords.x_cells_num + i] = 0;
+        }
 
     } else if (procCoords.x_cells_num > 1 and procCoords.y_cells_num == 1){
         // Counting regions n x 1, where n > 1
@@ -844,26 +773,18 @@ void DHP_PE_RA_FDM::Counting_5_star (const double* const f, double* const delta_
         // bottom -> up
         j = 0;
         if (not procCoords.top and not procCoords.bottom) {
-            #pragma omp parallel
-            {
-                #pragma omp for schedule (static)
-                for (i = 1; i < procCoords.x_cells_num -1; i++){
-                    delta_f[j * procCoords.x_cells_num + i] = (
-                            (f[j * procCoords.x_cells_num + i  ] - f[j * procCoords.x_cells_num + i-1]) / hx -
-                            (f[j * procCoords.x_cells_num + i+1] - f[j * procCoords.x_cells_num + i  ]) / hx
-                        ) / hx + (
-                            (f[ j    * procCoords.x_cells_num + i] - recv_message_td[i]               ) / hy -
-                            (recv_message_bu[i]                    - f[j * procCoords.x_cells_num + i]) / hy
-                        ) / hy;
-                }
+            for (i = 1; i < procCoords.x_cells_num -1; i++){
+                delta_f[j * procCoords.x_cells_num + i] = (
+                        (f[j * procCoords.x_cells_num + i  ] - f[j * procCoords.x_cells_num + i-1]) / hx -
+                        (f[j * procCoords.x_cells_num + i+1] - f[j * procCoords.x_cells_num + i  ]) / hx
+                    ) / hx + (
+                        (f[ j    * procCoords.x_cells_num + i] - recv_message_td[i]               ) / hy -
+                        (recv_message_bu[i]                    - f[j * procCoords.x_cells_num + i]) / hy
+                    ) / hy;
             }
         } else {
-            #pragma omp parallel
-            {
-                #pragma omp for schedule (static)
-                for (i = 1; i < procCoords.x_cells_num -1; i++){
-                    delta_f[j * procCoords.x_cells_num + i] = 0;
-                }
+            for (i = 1; i < procCoords.x_cells_num -1; i++){
+                delta_f[j * procCoords.x_cells_num + i] = 0;
             }
         }
 
@@ -871,42 +792,33 @@ void DHP_PE_RA_FDM::Counting_5_star (const double* const f, double* const delta_
         // Counting delta_f's corners
         // ==========================================
 
-        #pragma omp sections private(i, j)
-        {
-            #pragma omp section
-            {
-                j = 0;
-                i = 0;
-                if (not procCoords.top and not procCoords.bottom and not procCoords.left) {
-                    delta_f[j * procCoords.x_cells_num + i] = (
-                            (f[j * procCoords.x_cells_num + i  ] - recv_message_lr [0] ) / hx -
-                            (f[j * procCoords.x_cells_num + i+1] - f[j * procCoords.x_cells_num + i  ]) / hx
-                        ) / hx + (
-                            (f[ j    * procCoords.x_cells_num + i] - recv_message_td [0]                  ) / hy -
-                            (recv_message_bu[0]                    - f[ j    * procCoords.x_cells_num + i]) / hy
-                        ) / hy;
-                } else {
-                    delta_f[j * procCoords.x_cells_num + i] = 0;
-                }
-            }
+        j = 0;
+        i = 0;
+        if (not procCoords.top and not procCoords.bottom and not procCoords.left) {
+            delta_f[j * procCoords.x_cells_num + i] = (
+                    (f[j * procCoords.x_cells_num + i  ] - recv_message_lr [0] ) / hx -
+                    (f[j * procCoords.x_cells_num + i+1] - f[j * procCoords.x_cells_num + i  ]) / hx
+                ) / hx + (
+                    (f[ j    * procCoords.x_cells_num + i] - recv_message_td [0]                  ) / hy -
+                    (recv_message_bu[0]                    - f[ j    * procCoords.x_cells_num + i]) / hy
+                ) / hy;
+        } else {
+            delta_f[j * procCoords.x_cells_num + i] = 0;
+        }
 
-            #pragma omp section
-            {
-                j = 0;
-                i = procCoords.x_cells_num -1;
-                if (not procCoords.top and not procCoords.bottom and not procCoords.right){
-                    delta_f[j * procCoords.x_cells_num + i] = (
-                            (f[j * procCoords.x_cells_num + i  ] - f[j * procCoords.x_cells_num + i-1]) / hx -
-                            (recv_message_rl [0]                 - f[j * procCoords.x_cells_num + i  ]) / hx
-                        ) / hx + (
-                            (f[ j    * procCoords.x_cells_num + i] - recv_message_td [procCoords.x_cells_num -1] ) / hy -
-                            (recv_message_bu [procCoords.x_cells_num -1] - f[ j    * procCoords.x_cells_num + i]) / hy
-                        ) / hy;
-                } else {
-                    delta_f[j * procCoords.x_cells_num + i] = 0;
-                }
+        j = 0;
+        i = procCoords.x_cells_num -1;
+        if (not procCoords.top and not procCoords.bottom and not procCoords.right){
+            delta_f[j * procCoords.x_cells_num + i] = (
+                    (f[j * procCoords.x_cells_num + i  ] - f[j * procCoords.x_cells_num + i-1]) / hx -
+                    (recv_message_rl [0]                 - f[j * procCoords.x_cells_num + i  ]) / hx
+                ) / hx + (
+                    (f[ j    * procCoords.x_cells_num + i] - recv_message_td [procCoords.x_cells_num -1] ) / hy -
+                    (recv_message_bu [procCoords.x_cells_num -1] - f[ j    * procCoords.x_cells_num + i]) / hy
+                ) / hy;
+        } else {
+            delta_f[j * procCoords.x_cells_num + i] = 0;
             }
-        } // #pragma omp sections
 
     } else if (procCoords.x_cells_num == 1 and procCoords.y_cells_num > 1){
         // Counting regions 1 x m, where m > 1
@@ -915,26 +827,18 @@ void DHP_PE_RA_FDM::Counting_5_star (const double* const f, double* const delta_
         // right -> left
         i = 0;
         if (not procCoords.left and not procCoords.right) {
-            #pragma omp parallel
-            {
-                #pragma omp for schedule (static)
-                for (j = 1; j < procCoords.y_cells_num -1; j++){
-                    delta_f[j * procCoords.x_cells_num + i] = (
-                            (f[j * procCoords.x_cells_num + i  ] - recv_message_lr[j]               ) / hx -
-                            (recv_message_rl[j]                  - f[j * procCoords.x_cells_num + i]) / hx
-                        ) / hx + (
-                            (f[ j    * procCoords.x_cells_num + i] - f[(j-1) * procCoords.x_cells_num + i]) / hy -
-                            (f[(j+1) * procCoords.x_cells_num + i] - f[ j    * procCoords.x_cells_num + i]) / hy
-                        ) / hy;
-                }
+            for (j = 1; j < procCoords.y_cells_num -1; j++){
+                delta_f[j * procCoords.x_cells_num + i] = (
+                        (f[j * procCoords.x_cells_num + i  ] - recv_message_lr[j]               ) / hx -
+                        (recv_message_rl[j]                  - f[j * procCoords.x_cells_num + i]) / hx
+                    ) / hx + (
+                        (f[ j    * procCoords.x_cells_num + i] - f[(j-1) * procCoords.x_cells_num + i]) / hy -
+                        (f[(j+1) * procCoords.x_cells_num + i] - f[ j    * procCoords.x_cells_num + i]) / hy
+                    ) / hy;
             }
         } else {
-            #pragma omp parallel
-            {
-                #pragma omp for schedule (static)
-                for (j = 1; j < procCoords.y_cells_num -1; j++){
-                    delta_f[j * procCoords.x_cells_num + i] = 0;
-                }
+            for (j = 1; j < procCoords.y_cells_num -1; j++){
+                delta_f[j * procCoords.x_cells_num + i] = 0;
             }
         }
 
@@ -942,42 +846,33 @@ void DHP_PE_RA_FDM::Counting_5_star (const double* const f, double* const delta_
         // Counting delta_f's corners
         // ==========================================
 
-        #pragma omp sections private(i, j)
-        {
-            #pragma omp section
-            {
-                j = 0;
-                i = 0;
-                if (not procCoords.left and not procCoords.right and not procCoords.top) {
-                    delta_f[j * procCoords.x_cells_num + i] = (
-                            (f[j * procCoords.x_cells_num + i  ] - recv_message_lr [0]                ) / hx -
-                            (recv_message_rl[0]                  - f[j * procCoords.x_cells_num + i  ]) / hx
-                        ) / hx + (
-                            (f[ j    * procCoords.x_cells_num + i] - recv_message_td [0]                  ) / hy -
-                            (f[(j+1) * procCoords.x_cells_num + i] - f[ j    * procCoords.x_cells_num + i]) / hy
-                        ) / hy;
-                } else {
-                    delta_f[j * procCoords.x_cells_num + i] = 0;
-                }
-            }
+        j = 0;
+        i = 0;
+        if (not procCoords.left and not procCoords.right and not procCoords.top) {
+            delta_f[j * procCoords.x_cells_num + i] = (
+                    (f[j * procCoords.x_cells_num + i  ] - recv_message_lr [0]                ) / hx -
+                    (recv_message_rl[0]                  - f[j * procCoords.x_cells_num + i  ]) / hx
+                ) / hx + (
+                    (f[ j    * procCoords.x_cells_num + i] - recv_message_td [0]                  ) / hy -
+                    (f[(j+1) * procCoords.x_cells_num + i] - f[ j    * procCoords.x_cells_num + i]) / hy
+                ) / hy;
+        } else {
+            delta_f[j * procCoords.x_cells_num + i] = 0;
+        }
 
-            #pragma omp section
-            {
-                j = procCoords.y_cells_num -1;
-                i = 0;
-                if (not procCoords.left and not procCoords.right and not procCoords.bottom){
-                    delta_f[j * procCoords.x_cells_num + i] = (
-                            (f[j * procCoords.x_cells_num + i  ] - recv_message_lr[j]                   ) / hx -
-                            (recv_message_rl[j]                  - f[j * procCoords.x_cells_num + i  ]  ) / hx
-                        ) / hx + (
-                            (f[ j    * procCoords.x_cells_num + i] - f[(j-1) * procCoords.x_cells_num + i]) / hy -
-                            (recv_message_bu [0]                   - f[ j    * procCoords.x_cells_num + i]) / hy
-                        ) / hy;
-                } else {
-                    delta_f[j * procCoords.x_cells_num + i] = 0;
-                }
-            }
-        } // #pragma omp sections
+        j = procCoords.y_cells_num -1;
+        i = 0;
+        if (not procCoords.left and not procCoords.right and not procCoords.bottom){
+            delta_f[j * procCoords.x_cells_num + i] = (
+                    (f[j * procCoords.x_cells_num + i  ] - recv_message_lr[j]                   ) / hx -
+                    (recv_message_rl[j]                  - f[j * procCoords.x_cells_num + i  ]  ) / hx
+                ) / hx + (
+                    (f[ j    * procCoords.x_cells_num + i] - f[(j-1) * procCoords.x_cells_num + i]) / hy -
+                    (recv_message_bu [0]                   - f[ j    * procCoords.x_cells_num + i]) / hy
+                ) / hy;
+        } else {
+            delta_f[j * procCoords.x_cells_num + i] = 0;
+        }
 
     } else if (procCoords.x_cells_num == 1 and procCoords.y_cells_num == 1){
         // Counting regions 1 x 1
@@ -1016,52 +911,45 @@ void DHP_PE_RA_FDM::Counting_5_star (const double* const f, double* const delta_
 //                                                                                                              DHP_PE_RA_FDM::Initialize_P_and_Pprev
 // ==================================================================================================================================================
 void DHP_PE_RA_FDM::Initialize_P_and_Pprev (){
-    #pragma omp parallel
-    {
-        // boundary region
-        if (procCoords.top){
-            #pragma omp for schedule (guided)
-            for (int i = 0; i < procCoords.x_cells_num; i++){
-                p_prev[0 * procCoords.x_cells_num + i] = fi(X1 + (procCoords.x_cell_pos + i) * hx, Y1 + (procCoords.y_cell_pos + 0) * hy);
-                p[0 * procCoords.x_cells_num + i] = fi(X1 + (procCoords.x_cell_pos + i) * hx, Y1 + (procCoords.y_cell_pos + 0) * hy);
-            }
-        }
-        if (procCoords.bottom){
-            #pragma omp for schedule (guided)
-            for (int i = 0; i < procCoords.x_cells_num; i++){
-                p_prev[(procCoords.y_cells_num -1) * procCoords.x_cells_num + i] =
-                    fi(X1 + (procCoords.x_cell_pos + i) * hx, Y1 + (procCoords.y_cell_pos + (procCoords.y_cells_num -1)) * hy);
-                p[(procCoords.y_cells_num -1) * procCoords.x_cells_num + i] =
-                    fi(X1 + (procCoords.x_cell_pos + i) * hx, Y1 + (procCoords.y_cell_pos + (procCoords.y_cells_num -1)) * hy);
-            }
-        }
-        if (procCoords.left){
-            #pragma omp for schedule (guided)
-            for (int j = 0; j < procCoords.y_cells_num; j++){
-                p_prev[j * procCoords.x_cells_num + 0] = fi(X1 + (procCoords.x_cell_pos + 0) * hx, Y1 + (procCoords.y_cell_pos + j) * hy);
-                p[j * procCoords.x_cells_num + 0] = fi(X1 + (procCoords.x_cell_pos + 0) * hx, Y1 + (procCoords.y_cell_pos + j) * hy);
-            }
-        }
-        if (procCoords.right){
-            #pragma omp for schedule (guided)
-            for (int j = 0; j < procCoords.y_cells_num; j++){
-                p_prev[j * procCoords.x_cells_num + (procCoords.x_cells_num -1)] =
-                    fi(X1 + (procCoords.x_cell_pos + (procCoords.x_cells_num -1)) * hx, Y1 + (procCoords.y_cell_pos + j) * hy);
-                p[j * procCoords.x_cells_num + (procCoords.x_cells_num -1)] =
-                    fi(X1 + (procCoords.x_cell_pos + (procCoords.x_cells_num -1)) * hx, Y1 + (procCoords.y_cell_pos + j) * hy);
-            }
-        }
 
-        // internal region
-        #pragma omp for schedule (guided)
-        for (int j = static_cast<int>(procCoords.top); j < procCoords.y_cells_num - static_cast<int>(procCoords.bottom); j++){
-            memset(&(p_prev[j * procCoords.x_cells_num + static_cast<int>(procCoords.left)]), 0,
-                (procCoords.x_cells_num - static_cast<int>(procCoords.right) - static_cast<int>(procCoords.left)) * sizeof(*p_prev));
-
-            // for (int i = static_cast<int>(procCoords.left); i < procCoords.x_cells_num - static_cast<int>(procCoords.right); i++){
-            //     p_prev[j * procCoords.x_cells_num + i] = 0;
-            // }
+    // boundary region
+    if (procCoords.top){
+        for (int i = 0; i < procCoords.x_cells_num; i++){
+            p_prev[0 * procCoords.x_cells_num + i] = fi(X1 + (procCoords.x_cell_pos + i) * hx, Y1 + (procCoords.y_cell_pos + 0) * hy);
+            p[0 * procCoords.x_cells_num + i] = fi(X1 + (procCoords.x_cell_pos + i) * hx, Y1 + (procCoords.y_cell_pos + 0) * hy);
         }
+    }
+    if (procCoords.bottom){
+        for (int i = 0; i < procCoords.x_cells_num; i++){
+            p_prev[(procCoords.y_cells_num -1) * procCoords.x_cells_num + i] =
+                fi(X1 + (procCoords.x_cell_pos + i) * hx, Y1 + (procCoords.y_cell_pos + (procCoords.y_cells_num -1)) * hy);
+            p[(procCoords.y_cells_num -1) * procCoords.x_cells_num + i] =
+                fi(X1 + (procCoords.x_cell_pos + i) * hx, Y1 + (procCoords.y_cell_pos + (procCoords.y_cells_num -1)) * hy);
+        }
+    }
+    if (procCoords.left){
+        for (int j = 0; j < procCoords.y_cells_num; j++){
+            p_prev[j * procCoords.x_cells_num + 0] = fi(X1 + (procCoords.x_cell_pos + 0) * hx, Y1 + (procCoords.y_cell_pos + j) * hy);
+            p[j * procCoords.x_cells_num + 0] = fi(X1 + (procCoords.x_cell_pos + 0) * hx, Y1 + (procCoords.y_cell_pos + j) * hy);
+        }
+    }
+    if (procCoords.right){
+        for (int j = 0; j < procCoords.y_cells_num; j++){
+            p_prev[j * procCoords.x_cells_num + (procCoords.x_cells_num -1)] =
+                fi(X1 + (procCoords.x_cell_pos + (procCoords.x_cells_num -1)) * hx, Y1 + (procCoords.y_cell_pos + j) * hy);
+            p[j * procCoords.x_cells_num + (procCoords.x_cells_num -1)] =
+                fi(X1 + (procCoords.x_cell_pos + (procCoords.x_cells_num -1)) * hx, Y1 + (procCoords.y_cell_pos + j) * hy);
+        }
+    }
+
+    // internal region
+    for (int j = static_cast<int>(procCoords.top); j < procCoords.y_cells_num - static_cast<int>(procCoords.bottom); j++){
+        SAFE_CUDA(cudaMemset(p_prev + j * procCoords.x_cells_num + static_cast<int>(procCoords.left), 0,
+            (procCoords.x_cells_num - static_cast<int>(procCoords.right) - static_cast<int>(procCoords.left)) * sizeof(*p_prev)));
+
+        // for (int i = static_cast<int>(procCoords.left); i < procCoords.x_cells_num - static_cast<int>(procCoords.right); i++){
+        //     p_prev[j * procCoords.x_cells_num + i] = 0;
+        // }
     }
 }
 
@@ -1070,42 +958,36 @@ void DHP_PE_RA_FDM::Initialize_P_and_Pprev (){
 //                                                                                                                           DHP_PE_RA_FDM::Compute_r
 // ==================================================================================================================================================
 void DHP_PE_RA_FDM::Compute_r (const double* const delta_p, double* const r) const{
-    #pragma omp parallel
-    {
-        // boundary region
-        if (procCoords.top){
 
-            memset(&(r[0 * procCoords.x_cells_num + 0]), 0,
-                procCoords.x_cells_num * sizeof(*r));
-        }
-        if (procCoords.bottom){
+    // boundary region
+    if (procCoords.top){
 
-            memset(&(r[(procCoords.y_cells_num -1) * procCoords.x_cells_num + 0]), 0,
-                procCoords.x_cells_num * sizeof(*r));
-        }
-        if (procCoords.left){
-            #pragma omp for schedule (guided)
-            for (int j = 0; j < procCoords.y_cells_num; j++){
-                r[j * procCoords.x_cells_num + 0] = 0;
-            }
-        }
-        if (procCoords.right){
-            #pragma omp for schedule (guided)
-            for (int j = 0; j < procCoords.y_cells_num; j++){
-                r[j * procCoords.x_cells_num + (procCoords.x_cells_num -1)] = 0;
-            }
-        }
+        SAFE_CUDA(cudaMemset(r + 0 * procCoords.x_cells_num + 0, 0,
+            procCoords.x_cells_num * sizeof(*r)));
+    }
+    if (procCoords.bottom){
 
-        // internal region
-        // #pragma omp for schedule (guided) collapse (2)
-        #pragma omp for schedule (guided)
-        for (int j = static_cast<int>(procCoords.top); j < procCoords.y_cells_num - static_cast<int>(procCoords.bottom); j++){
-            for (int i = static_cast<int>(procCoords.left); i < procCoords.x_cells_num - static_cast<int>(procCoords.right); i++){
-                r[j * procCoords.x_cells_num + i] =
-                    delta_p[j * procCoords.x_cells_num + i] -
-                    F(X1 + (procCoords.x_cell_pos + i) * hx, Y1 + (procCoords.y_cell_pos + j) * hy)
-                    ;
-            }
+        SAFE_CUDA(cudaMemset(r + (procCoords.y_cells_num -1) * procCoords.x_cells_num + 0, 0,
+            procCoords.x_cells_num * sizeof(*r)));
+    }
+    if (procCoords.left){
+        for (int j = 0; j < procCoords.y_cells_num; j++){
+            r[j * procCoords.x_cells_num + 0] = 0;
+        }
+    }
+    if (procCoords.right){
+        for (int j = 0; j < procCoords.y_cells_num; j++){
+            r[j * procCoords.x_cells_num + (procCoords.x_cells_num -1)] = 0;
+        }
+    }
+
+    // internal region
+    for (int j = static_cast<int>(procCoords.top); j < procCoords.y_cells_num - static_cast<int>(procCoords.bottom); j++){
+        for (int i = static_cast<int>(procCoords.left); i < procCoords.x_cells_num - static_cast<int>(procCoords.right); i++){
+            r[j * procCoords.x_cells_num + i] =
+                delta_p[j * procCoords.x_cells_num + i] -
+                F(X1 + (procCoords.x_cell_pos + i) * hx, Y1 + (procCoords.y_cell_pos + j) * hy)
+                ;
         }
     }
 }
@@ -1115,51 +997,43 @@ void DHP_PE_RA_FDM::Compute_r (const double* const delta_p, double* const r) con
 //                                                                                                                           DHP_PE_RA_FDM::Compute_g
 // ==================================================================================================================================================
 void DHP_PE_RA_FDM::Compute_g (double* const g, const double* const r, const double alpha) const{
-    #pragma omp parallel
-    {
-        // boundary region
-        if (procCoords.top){
 
-            memset(&(g[0 * procCoords.x_cells_num + 0]), 0,
-                procCoords.x_cells_num * sizeof(*g));
-        }
-        if (procCoords.bottom){
+    // boundary region
+    if (procCoords.top){
 
-            memset(&(g[(procCoords.y_cells_num -1) * procCoords.x_cells_num + 0]), 0,
-                procCoords.x_cells_num * sizeof(*g));
-        }
-        if (procCoords.left){
-            #pragma omp for schedule (guided)
-            for (int j = 0; j < procCoords.y_cells_num; j++){
-                g[j * procCoords.x_cells_num + 0] = 0;
-            }
-        }
-        if (procCoords.right){
-            #pragma omp for schedule (guided)
-            for (int j = 0; j < procCoords.y_cells_num; j++){
-                g[j * procCoords.x_cells_num + (procCoords.x_cells_num -1)] = 0;
-            }
-        }
-
-        // internal region
-        if (iterations_counter >= descent_step_iterations){
-            // #pragma omp for schedule (guided) collapse (2)
-            #pragma omp for schedule (guided)
-            for (int j = static_cast<int>(procCoords.top); j < procCoords.y_cells_num - static_cast<int>(procCoords.bottom); j++){
-                for (int i = static_cast<int>(procCoords.left); i < procCoords.x_cells_num - static_cast<int>(procCoords.right); i++){
-                    g[j * procCoords.x_cells_num + i] = r[j * procCoords.x_cells_num + i] - alpha * g[j * procCoords.x_cells_num + i];
-                }
-            }
-        } else {
-            // #pragma omp for schedule (guided) collapse (2)
-            #pragma omp for schedule (guided)
-            for (int j = static_cast<int>(procCoords.top); j < procCoords.y_cells_num - static_cast<int>(procCoords.bottom); j++){
-                for (int i = static_cast<int>(procCoords.left); i < procCoords.x_cells_num - static_cast<int>(procCoords.right); i++){
-                    g[j * procCoords.x_cells_num + i] = r[j * procCoords.x_cells_num + i];
-                }
-            }
-        }   
+        SAFE_CUDA(cudaMemset(g + 0 * procCoords.x_cells_num + 0, 0,
+            procCoords.x_cells_num * sizeof(*g)));
     }
+    if (procCoords.bottom){
+
+        SAFE_CUDA(cudaMemset(g + (procCoords.y_cells_num -1) * procCoords.x_cells_num + 0, 0,
+            procCoords.x_cells_num * sizeof(*g)));
+    }
+    if (procCoords.left){
+        for (int j = 0; j < procCoords.y_cells_num; j++){
+            g[j * procCoords.x_cells_num + 0] = 0;
+        }
+    }
+    if (procCoords.right){
+        for (int j = 0; j < procCoords.y_cells_num; j++){
+            g[j * procCoords.x_cells_num + (procCoords.x_cells_num -1)] = 0;
+        }
+    }
+
+    // internal region
+    if (iterations_counter >= descent_step_iterations){
+        for (int j = static_cast<int>(procCoords.top); j < procCoords.y_cells_num - static_cast<int>(procCoords.bottom); j++){
+            for (int i = static_cast<int>(procCoords.left); i < procCoords.x_cells_num - static_cast<int>(procCoords.right); i++){
+                g[j * procCoords.x_cells_num + i] = r[j * procCoords.x_cells_num + i] - alpha * g[j * procCoords.x_cells_num + i];
+            }
+        }
+    } else {
+        for (int j = static_cast<int>(procCoords.top); j < procCoords.y_cells_num - static_cast<int>(procCoords.bottom); j++){
+            for (int i = static_cast<int>(procCoords.left); i < procCoords.x_cells_num - static_cast<int>(procCoords.right); i++){
+                g[j * procCoords.x_cells_num + i] = r[j * procCoords.x_cells_num + i];
+            }
+        }
+    }   
 }
 
 
@@ -1167,14 +1041,9 @@ void DHP_PE_RA_FDM::Compute_g (double* const g, const double* const r, const dou
 //                                                                                                                           DHP_PE_RA_FDM::Compute_p
 // ==================================================================================================================================================
 void DHP_PE_RA_FDM::Compute_p (const double tau, const double* const g) {
-    #pragma omp parallel
-    {
-        // #pragma omp for schedule (guided) collapse (2)
-        #pragma omp for schedule (guided)
-        for (int j = static_cast<int>(procCoords.top); j < procCoords.y_cells_num - static_cast<int>(procCoords.bottom); j++){
-            for (int i = static_cast<int>(procCoords.left); i < procCoords.x_cells_num - static_cast<int>(procCoords.right); i++){
-                p[j * procCoords.x_cells_num + i] = p_prev[j * procCoords.x_cells_num + i] - tau * g[j * procCoords.x_cells_num + i];
-            }
+    for (int j = static_cast<int>(procCoords.top); j < procCoords.y_cells_num - static_cast<int>(procCoords.bottom); j++){
+        for (int i = static_cast<int>(procCoords.left); i < procCoords.x_cells_num - static_cast<int>(procCoords.right); i++){
+            p[j * procCoords.x_cells_num + i] = p_prev[j * procCoords.x_cells_num + i] - tau * g[j * procCoords.x_cells_num + i];
         }
     }
 }

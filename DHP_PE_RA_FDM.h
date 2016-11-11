@@ -1,10 +1,23 @@
+#pragma once
+
 #include <exception>
+#include <sstream>
 #include <string>
+#include <utility>
 
 #include <mpi.h>
+#include <cuda_runtime.h>
 
 using std::exception;
 using std::string;
+using std::stringstream;
+using std::pair;
+
+#define SAFE_CUDA(err)\
+    if (err != cudaSuccess){ \
+        stringstream sstr; sstr << __FILE__ << ":" << __LINE__ << " cuda-error= " << cudaGetErrorString(err); \
+        throw DHP_PE_RA_FDM_Exception(sstr.str().c_str()); \
+    }
 
 // ==================================================================================================================================================
 //                                                                                                                            DHP_PE_RA_FDM_Exception
@@ -93,12 +106,15 @@ struct ProcComputingCoords {
 // 
 // Dirichlet-Problem-Poisson's-Equation-Rectangular-Area-Finite-Difference-Method
 // 
+#define fi(x, y) (x*x + y*y)/((1 + x*y)*(1 + x*y))
+#define F(x, y) logf(1 + x*y)
+// 
 class DHP_PE_RA_FDM {
 
         public:
     
-    DHP_PE_RA_FDM(  const double x1, const double y1, const double x2, const double y2, const int grid_size_x_, const int grid_size_y_, const double eps_,
-                    const int descent_step_iterations_ = 1);
+    DHP_PE_RA_FDM(  const double x1, const double y1, const double x2, const double y2, const int grid_size_x_, const int grid_size_y_,
+                    const double eps_, const int cudaDeviceNum, const int descent_step_iterations_ = 1);
     virtual ~DHP_PE_RA_FDM();
 
     // Main function for solving differential equation
@@ -130,11 +146,6 @@ class DHP_PE_RA_FDM {
 
         protected:
 
-    // right side of Laplace operator
-    virtual double F (const double x, const double y) const = 0;
-    // boundary conditions
-    virtual double fi (const double x, const double y) const = 0;
-    // stopping criteria (must return true/false value for each process)
     virtual bool StopCriteria (const double* const f1, const double* const f2);
 
     MPI_Comm PrepareMPIComm (const ProcParams& procParams_in, const int x_proc_num, const int y_proc_num) const;
@@ -155,6 +166,10 @@ class DHP_PE_RA_FDM {
     void Compute_g (double* const g, const double* const r, const double alpha) const;
     void Compute_p (const double tau, const double* const g);
 
+    cudaDeviceProp devProp;
+    pair<dim3, dim3> GridDistribute (const int demandedThreadNum);
+
+    void cuda_Initialize_P_and_Pprev ();
 
     ProcParams procParams;
     ProcComputingCoords procCoords;
@@ -163,6 +178,7 @@ class DHP_PE_RA_FDM {
 
     // p is a double array
     // p(i=x, j=y) = p [y * row_len + x]
+    
     double* p;
     double* p_prev;
 
@@ -187,6 +203,6 @@ class DHP_PE_RA_FDM {
         DumpSync
     };
 
-    static const bool debug = false;
+    static const bool debug = true;
     string debug_fname;
 };
