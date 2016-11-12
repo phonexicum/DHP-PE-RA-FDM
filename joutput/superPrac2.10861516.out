@@ -1,0 +1,5 @@
+out= output/bgp-out-512-2000
+x_p_N= 16
+y_p_N= 32
+ms= 48431 m:s= 0:48
+it= 2828

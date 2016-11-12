@@ -1,0 +1,6 @@
+OpenMP-version= 200505 Max-threads= 3
+out= output/bgp-out-256-1000-omp
+x_p_N= 16
+y_p_N= 16
+ms= 3029 m:s= 0:3
+it= 1416
