@@ -57,8 +57,6 @@ __global__ void cudakernel_Counting_5_star_LR_delta_f (double* const delta_f, co
                     (f[ j    * procCoords.x_cells_num + i] - f[(j-1) * procCoords.x_cells_num + i]) / hy -
                     (f[(j+1) * procCoords.x_cells_num + i] - f[ j    * procCoords.x_cells_num + i]) / hy
                 ) / hy;
-        } else {
-            delta_f[j * procCoords.x_cells_num + i] = 0;
         }
 }
 
@@ -83,8 +81,6 @@ __global__ void cudakernel_Counting_5_star_RL_delta_f (double* const delta_f, co
                     (f[ j    * procCoords.x_cells_num + i] - f[(j-1) * procCoords.x_cells_num + i]) / hy -
                     (f[(j+1) * procCoords.x_cells_num + i] - f[ j    * procCoords.x_cells_num + i]) / hy
                 ) / hy;
-        } else {
-            delta_f[j * procCoords.x_cells_num + i] = 0;
         }
 }
 
@@ -109,8 +105,6 @@ __global__ void cudakernel_Counting_5_star_TD_delta_f (double* const delta_f, co
                     (f[ j    * procCoords.x_cells_num + i] - recv_message_td[i]               ) / hy -
                     (f[(j+1) * procCoords.x_cells_num + i] - f[j * procCoords.x_cells_num + i]) / hy
                 ) / hy;
-        } else {
-            delta_f[j * procCoords.x_cells_num + i] = 0;
         }
 }
 
@@ -135,8 +129,6 @@ __global__ void cudakernel_Counting_5_star_BU_delta_f (double* const delta_f, co
                     (f[ j    * procCoords.x_cells_num + i] - f[(j-1) * procCoords.x_cells_num + i]) / hy -
                     (recv_message_bu[i]                    - f[ j    * procCoords.x_cells_num + i]) / hy
                 ) / hy;
-        } else {
-            delta_f[j * procCoords.x_cells_num + i] = 0;
         }
 }
 
@@ -162,8 +154,6 @@ __global__ void cudakernel_Counting_5_star_TDBU_delta_f (double* const delta_f, 
                     (f[ j    * procCoords.x_cells_num + i] - recv_message_td[i]               ) / hy -
                     (recv_message_bu[i]                    - f[j * procCoords.x_cells_num + i]) / hy
                 ) / hy;
-        } else {
-            delta_f[j * procCoords.x_cells_num + i] = 0;
         }
 }
 
@@ -189,8 +179,6 @@ __global__ void cudakernel_Counting_5_star_LRRL_delta_f (double* const delta_f, 
                     (f[ j    * procCoords.x_cells_num + i] - f[(j-1) * procCoords.x_cells_num + i]) / hy -
                     (f[(j+1) * procCoords.x_cells_num + i] - f[ j    * procCoords.x_cells_num + i]) / hy
                 ) / hy;
-        } else {
-            delta_f[j * procCoords.x_cells_num + i] = 0;
         }
 }
 
@@ -441,8 +429,6 @@ void DHP_PE_RA_FDM::cuda_Counting_5_star (const double* const f, double* const d
                     (f[ j    * procCoords.x_cells_num + i] - recv_message_td [0]                  ) / hy -
                     (f[(j+1) * procCoords.x_cells_num + i] - f[ j    * procCoords.x_cells_num + i]) / hy
                 ) / hy;
-        } else {
-            delta_f[j * procCoords.x_cells_num + i] = 0;
         }
 
         j = 0;
@@ -455,8 +441,6 @@ void DHP_PE_RA_FDM::cuda_Counting_5_star (const double* const f, double* const d
                     (f[ j    * procCoords.x_cells_num + i] - recv_message_td [procCoords.x_cells_num -1] ) / hy -
                     (f[(j+1) * procCoords.x_cells_num + i] - f[ j    * procCoords.x_cells_num + i]) / hy
                 ) / hy;
-        } else {
-            delta_f[j * procCoords.x_cells_num + i] = 0;
         }
 
         j = procCoords.y_cells_num -1;
@@ -469,8 +453,6 @@ void DHP_PE_RA_FDM::cuda_Counting_5_star (const double* const f, double* const d
                     (f[ j    * procCoords.x_cells_num + i] - f[(j-1) * procCoords.x_cells_num + i]) / hy -
                     (recv_message_bu [0]                   - f[ j    * procCoords.x_cells_num + i]) / hy
                 ) / hy;
-        } else {
-            delta_f[j * procCoords.x_cells_num + i] = 0;
         }
 
         j = procCoords.y_cells_num -1;
@@ -483,8 +465,6 @@ void DHP_PE_RA_FDM::cuda_Counting_5_star (const double* const f, double* const d
                     (f[ j    * procCoords.x_cells_num + i] - f[(j-1) * procCoords.x_cells_num + i]) / hy -
                     (recv_message_bu [procCoords.x_cells_num -1] - f[ j    * procCoords.x_cells_num + i]) / hy
                 ) / hy;
-        } else {
-            delta_f[j * procCoords.x_cells_num + i] = 0;
         }
 
     } else if (procCoords.x_cells_num > 1 and procCoords.y_cells_num == 1){
@@ -509,8 +489,6 @@ void DHP_PE_RA_FDM::cuda_Counting_5_star (const double* const f, double* const d
                     (f[ j    * procCoords.x_cells_num + i] - recv_message_td [0]                  ) / hy -
                     (recv_message_bu[0]                    - f[ j    * procCoords.x_cells_num + i]) / hy
                 ) / hy;
-        } else {
-            delta_f[j * procCoords.x_cells_num + i] = 0;
         }
 
         j = 0;
@@ -523,9 +501,7 @@ void DHP_PE_RA_FDM::cuda_Counting_5_star (const double* const f, double* const d
                     (f[ j    * procCoords.x_cells_num + i] - recv_message_td [procCoords.x_cells_num -1] ) / hy -
                     (recv_message_bu [procCoords.x_cells_num -1] - f[ j    * procCoords.x_cells_num + i]) / hy
                 ) / hy;
-        } else {
-            delta_f[j * procCoords.x_cells_num + i] = 0;
-            }
+        }
 
     } else if (procCoords.x_cells_num == 1 and procCoords.y_cells_num > 1){
         // Counting regions 1 x m, where m > 1
@@ -549,8 +525,6 @@ void DHP_PE_RA_FDM::cuda_Counting_5_star (const double* const f, double* const d
                     (f[ j    * procCoords.x_cells_num + i] - recv_message_td [0]                  ) / hy -
                     (f[(j+1) * procCoords.x_cells_num + i] - f[ j    * procCoords.x_cells_num + i]) / hy
                 ) / hy;
-        } else {
-            delta_f[j * procCoords.x_cells_num + i] = 0;
         }
 
         j = procCoords.y_cells_num -1;
@@ -563,8 +537,6 @@ void DHP_PE_RA_FDM::cuda_Counting_5_star (const double* const f, double* const d
                     (f[ j    * procCoords.x_cells_num + i] - f[(j-1) * procCoords.x_cells_num + i]) / hy -
                     (recv_message_bu [0]                   - f[ j    * procCoords.x_cells_num + i]) / hy
                 ) / hy;
-        } else {
-            delta_f[j * procCoords.x_cells_num + i] = 0;
         }
 
     } else if (procCoords.x_cells_num == 1 and procCoords.y_cells_num == 1){
@@ -580,8 +552,6 @@ void DHP_PE_RA_FDM::cuda_Counting_5_star (const double* const f, double* const d
                     (f[ j    * procCoords.x_cells_num + i] - recv_message_td[0]                   ) / hy -
                     (recv_message_bu [0]                   - f[ j    * procCoords.x_cells_num + i]) / hy
                 ) / hy;
-        } else {
-            delta_f[j * procCoords.x_cells_num + i] = 0;
         }
     }
 

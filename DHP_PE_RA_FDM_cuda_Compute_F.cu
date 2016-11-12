@@ -34,6 +34,8 @@ void DHP_PE_RA_FDM::cuda_Compute_r (double* const r, const double* const delta_p
         (procCoords.x_cells_num - static_cast<int>(procCoords.right) - static_cast<int>(procCoords.left))
     );
     cudakernel_Compute_r<<<mesh.first, mesh.second, 0, cudaStreams[0]>>> (r, delta_p, procCoords, X1, Y1, hx, hy);
+
+    cudaAllStreamsSynchronize(0, 0);
 }
 
 
@@ -57,22 +59,13 @@ __global__ void cudakernel_Compute_g (double* const g, const double* const r, co
 void DHP_PE_RA_FDM::Compute_g (double* const g, const double* const r, const double alpha) const{
 
     // internal region
-    if (iterations_counter >= descent_step_iterations){
-        pair<dim3, dim3> mesh = GridDistribute(
-            (procCoords.y_cells_num - static_cast<int>(procCoords.bottom) - static_cast<int>(procCoords.top)) *
-            (procCoords.x_cells_num - static_cast<int>(procCoords.right) - static_cast<int>(procCoords.left))
-        );
-        cudakernel_Compute_g<<<mesh.first, mesh.second, 0, cudaStreams[0]>>> (g, r, alpha, procCoords);
+    pair<dim3, dim3> mesh = GridDistribute(
+        (procCoords.y_cells_num - static_cast<int>(procCoords.bottom) - static_cast<int>(procCoords.top)) *
+        (procCoords.x_cells_num - static_cast<int>(procCoords.right) - static_cast<int>(procCoords.left))
+    );
+    cudakernel_Compute_g<<<mesh.first, mesh.second, 0, cudaStreams[0]>>> (g, r, alpha, procCoords);
 
-    } else {
-
-        for (int j = static_cast<int>(procCoords.top); j < procCoords.y_cells_num - static_cast<int>(procCoords.bottom); j++){
-            for (int i = static_cast<int>(procCoords.left); i < procCoords.x_cells_num - static_cast<int>(procCoords.right); i++){
-                g[j * procCoords.x_cells_num + i] = r[j * procCoords.x_cells_num + i];
-            }
-        }
-
-    }
+    cudaAllStreamsSynchronize(0, 0);
 }
 
 
@@ -101,4 +94,6 @@ void DHP_PE_RA_FDM::cuda_Compute_p (const double tau, const double* const g) {
         (procCoords.x_cells_num - static_cast<int>(procCoords.right) - static_cast<int>(procCoords.left))
     );
     cudakernel_Compute_g<<<mesh.first, mesh.second, 0, cudaStreams[0]>>> (p, p_prev, g, tau, procCoords);
+
+    cudaAllStreamsSynchronize(0, 0);
 }

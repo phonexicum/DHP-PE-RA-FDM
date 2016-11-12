@@ -121,6 +121,8 @@ void DHP_PE_RA_FDM::cuda_Initialize_F_border_with_zero (double* const f){
     if (procCoords.right){
 
         pair<dim3, dim3> mesh = GridDistribute(procCoords.y_cells_num);
-        cudakernel_Initialize_F_with_zero_vertical<<<mesh.first, mesh.second, 0, cudaStreams[0]>>> (f + procCoords.x_cells_num -1, procCoords.y_cells_num, procCoords.x_cells_num);
+        cudakernel_Initialize_F_with_zero_vertical<<<mesh.first, mesh.second, 0, cudaStreams[1]>>> (f + procCoords.x_cells_num -1, procCoords.y_cells_num, procCoords.x_cells_num);
     }
+
+    cudaAllStreamsSynchronize(0, 1);
 }

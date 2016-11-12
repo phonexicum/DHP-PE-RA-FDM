@@ -149,7 +149,7 @@ class DHP_PE_RA_FDM {
 
         protected:
 
-    virtual bool StopCriteria (const double* const f1, const double* const f2);
+    virtual bool cuda_StopCriteria (const double* const f1, const double* const f2);
 
     MPI_Comm PrepareMPIComm (const ProcParams& procParams_in, const int x_proc_num, const int y_proc_num) const;
 
@@ -162,23 +162,20 @@ class DHP_PE_RA_FDM {
 
 
     // This function computes five-point difference equation for Laplace operator approximation for function f and stores result into delta_f
-    void Counting_5_star (const double* const f, double* const delta_f);
     void cuda_Counting_5_star (const double* const f, double* const delta_f);
 
     // This function computes scalar product of two functions. Scalar product ignores function values on the boundaries
     // 
     //  return value: global scalar_product of two functions for each of the processes
     //  
-    double ComputingScalarProduct (const double* const f, const double* const delta_f);
+    double cuda_ComputingScalarProduct (const double* const f1, const double* const f2);
 
-    void Initialize_P_and_Pprev ();
     void cuda_Initialize_P_and_Pprev ();
 
     void cuda_Initialize_F_border_with_zero (double* const f);
-    void Compute_r (const double* const delta_p, double* const r) const;
     void cuda_Compute_r (double* const r, const double* const delta_p) const;
-    void Compute_g (double* const g, const double* const r, const double alpha) const;
-    void Compute_p (const double tau, const double* const g);
+    void cuda_Compute_g (double* const g, const double* const r, const double alpha) const;
+    void cuda_Compute_p (const double tau, const double* const g);
 
 
     ProcParams procParams;
@@ -189,6 +186,8 @@ class DHP_PE_RA_FDM {
     static const int cudaStreams_num = 16;
     cudaStream_t cudaStreams[cudaStreams_num];
     
+    double* scalar_product_aggregation_array;
+
     // p is a double array allocated ON DEVICE
     // p(i=x, j=y) = p [y * row_len + x]
     double* p;
