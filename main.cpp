@@ -31,7 +31,6 @@ using std::endl;
 using std::fstream;
 using std::stringstream;
 using std::string;
-// using std::to_string;
 
 using std::setprecision;
 using std::numeric_limits;
@@ -52,9 +51,6 @@ class DHP_PE_RA_FDM_superprac : public DHP_PE_RA_FDM {
 
     double F (const double x, const double y) const;
     double fi (const double x, const double y) const;
-
-    // Exact solution
-    // DSolveValue[{    Laplasian(u[x,y], {x, y}) = -(x*x + y*y)/((1+x*y)*(1+x*y))    ,    DirichletCondition[ u[x, y] = Piecewise[{{ln(1+x*y) , (y == 0 || y == 3) && ( 0 <= x && x <= 3) || (x == 0 || x == 3) && ( 0 <= y && y <= 3) }}], True];    }, u[x, y], {x, y} \[Element]    Rectangle[{0, 3}, {0, 3}]    ]
 
 };
 
@@ -89,7 +85,7 @@ int main (int argc, char** argv){
 
         if (procParams.rank == 0){
             #ifdef _OPENMP
-                cout << "OpenMP version " << _OPENMP << ". Max threads= " << omp_get_max_threads() << endl;
+                cout << "OpenMP-version= " << _OPENMP << " Max-threads= " << omp_get_max_threads() << endl;
             #endif
         }
 
@@ -105,11 +101,12 @@ int main (int argc, char** argv){
         long int finish_ms = tp.tv_sec * 1000 + tp.tv_usec / 1000;
 
         if (procParams.rank == 0){
-            cout << "output= " << fout_name << endl
-                 << "x_proc_num= " << x_proc_num << endl
-                 << "y_proc_num= " << y_proc_num << endl
-                 << "miliseconds= " << finish_ms - start_ms << endl
-                 << "iterationsCounter= " <<  superPrac_2.getIterationsCounter() << endl;
+            int ms = finish_ms - start_ms;
+            cout << "out= " << fout_name << endl
+                 << "x_p_N= " << x_proc_num << endl
+                 << "y_p_N= " << y_proc_num << endl
+                 << "ms= " << finish_ms - start_ms << " m:s= " << ms / 1000 / 60 << ":" << ms / 1000 % 60 <<  endl
+                 << "it= " <<  superPrac_2.getIterationsCounter() << endl;
         }
 
         superPrac_2.Print_p(fout_name);
@@ -158,21 +155,12 @@ void DHP_PE_RA_FDM_superprac::Print_p (const string& dout_name) const{
     ProcParams procParams = getProcParams();
     ProcComputingCoords procCoords = getProcCoords();
 
-    // fstream fout(string("./") + dout_name + string("/output.txt.") + to_string(procParams.rank), fstream::out);
     stringstream ss;
     ss << "./" << dout_name << "/output.txt." << procParams.rank;
     fstream fout(ss.str().c_str(), fstream::out);
-    // FILE* fout = fopen(dout_name.c_str(), "a");
-
-    // This will block until file will get free
-    // while (flock (fileno(fout), LOCK_EX) != 0){
-    //     usleep(100000); // = 0.1 second // microseconds
-    // }
 
     double* p = getSolutionPerProcess();
 
-    // fprintf(fout, "# x y z\n");
-    // fout << "# x y z" << endl;
     fout << "[" << endl;
     for (int j = 0; j < procCoords.y_cells_num; j++){
         for (int i = 0; i < procCoords.x_cells_num; i++){
@@ -188,22 +176,16 @@ void DHP_PE_RA_FDM_superprac::Print_p (const string& dout_name) const{
                 fout << "}" << endl;
             else
                 fout << "}," << endl;
-            // fprintf (fout, "%f %f %f\n", X1 + (procCoords.x_cell_pos + i) * hx, Y1 + (procCoords.y_cell_pos + j) * hy, p[j * procCoords.x_cells_num + i]);
         }
-        // fprintf (fout, "\n");
     }
     fout << "]" << endl;
 
-    // free file lock
-    // flock (fileno(fout), LOCK_UN);
-
     fout.close();
-    // fclose(fout);
 }
 
 
 // ==================================================================================================================================================
-//                                                                                                                            ComputeGridFragmentation
+//                                                                                                                           ComputeGridFragmentation
 // ==================================================================================================================================================
 void ComputeGridFragmentation (const ProcParams& procParams, int& x_proc_num, int& y_proc_num){
 

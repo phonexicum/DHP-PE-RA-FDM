@@ -1,12 +1,17 @@
+INCLUDES=$(wildcard *.h)
+SOURCES=$(wildcard *.cpp)
+
 superPrac2: main.cpp DHP_PE_RA_FDM.cpp DHP_PE_RA_FDM.h
 	mpicxx -o superPrac2 main.cpp DHP_PE_RA_FDM.cpp DHP_PE_RA_FDM.h -Wall -std=gnu++98 -Wno-unknown-pragmas
 	mkdir -p output
 
 superPrac2-omp: main.cpp DHP_PE_RA_FDM.cpp DHP_PE_RA_FDM.h
-	mpixlcxx_r -o superPrac2-omp main.cpp DHP_PE_RA_FDM.cpp -qsmp=omp
+	mpic++ main.cpp DHP_PE_RA_FDM.cpp -o superPrac2-omp -fopenmp
 	mkdir -p output
 
-.PHONY: clean
+
+.PHONY: clean graph lmount jmount lcompile jcompile jcompile-omp jprepare lprepare upload
+
 
 run:
 	mpirun -np 2 ./superPrac2 100 0.0001 output
@@ -19,7 +24,7 @@ graph:
 	./gnuplot.script
 
 clean:
-	rm -f -R superPrac2 superPrac2-omp output*
+	rm -f -R superPrac2 superPrac2-omp output* debug.txt
 
 
 
@@ -29,7 +34,7 @@ jmount:
 
 lmount:
 	mkdir -p ./mount/
-	sshfs -o nonempty avasilenko2_1854@lomonosov.parallel.ru:/mnt/data/users/dm4/vol12/avasilenko2_1854 ./mount/
+	sshfs -o nonempty avasilenko2_1854@lomonosov.parallel.ru:/mnt/data/users/dm4/vol12/avasilenko2_1854/DHP ./mount/
 
 
 
@@ -39,21 +44,28 @@ jcompile:
 jcompile-omp:
 	mpixlcxx_r main.cpp DHP_PE_RA_FDM.cpp -o superPrac2-omp -qsmp=omp
 
+# module add slurm/15.08
+# module add impi/5.0.1
 lcompile:
-	# module add slurm/15.08
-	# module add impi/5.0.1
 	mpicxx main.cpp DHP_PE_RA_FDM.cpp DHP_PE_RA_FDM.h -o superPrac2 -std=c++0x -Wall -Wno-unknown-pragmas
 
 	cp ./superPrac2 ~/_scratch/superPrac2
 
 
 
-upload:
+MINCLUDES=$(INCLUDES:%=mount/%)
+MSOURCES=$(SOURCES:%=mount/%)
+
+mount/Makefile: Makefile
 	cp Makefile ./mount/
 
-	cp main.cpp ./mount/
-	cp DHP_PE_RA_FDM.cpp ./mount/
-	cp DHP_PE_RA_FDM.h ./mount/
+mount/%.h: %.h
+	cp $(@F) ./mount/
+
+mount/%.cpp: %.cpp
+	cp $(@F) ./mount/
+
+upload: $(MINCLUDES) $(MSOURCES) mount/Makefile
 
 
 
@@ -78,17 +90,17 @@ jprepare:
 	mkdir -p ./output/bgp-out-512-2000-omp
 
 lprepare:
-	mkdir -p ./_scratch/output/lom-out-1-1000
-	mkdir -p ./_scratch/output/lom-out-1-2000
+	mkdir -p ~/_scratch/output/lom-out-1-1000
+	mkdir -p ~/_scratch/output/lom-out-1-2000
 
-	mkdir -p ./_scratch/output/lom-out-8-1000
-	mkdir -p ./_scratch/output/lom-out-16-1000
-	mkdir -p ./_scratch/output/lom-out-32-1000
-	mkdir -p ./_scratch/output/lom-out-64-1000
-	mkdir -p ./_scratch/output/lom-out-128-1000
+	mkdir -p ~/_scratch/output/lom-out-8-1000
+	mkdir -p ~/_scratch/output/lom-out-16-1000
+	mkdir -p ~/_scratch/output/lom-out-32-1000
+	mkdir -p ~/_scratch/output/lom-out-64-1000
+	mkdir -p ~/_scratch/output/lom-out-128-1000
 
-	mkdir -p ./_scratch/output/lom-out-8-2000
-	mkdir -p ./_scratch/output/lom-out-16-2000
-	mkdir -p ./_scratch/output/lom-out-32-2000
-	mkdir -p ./_scratch/output/lom-out-64-2000
-	mkdir -p ./_scratch/output/lom-out-128-2000
+	mkdir -p ~/_scratch/output/lom-out-8-2000
+	mkdir -p ~/_scratch/output/lom-out-16-2000
+	mkdir -p ~/_scratch/output/lom-out-32-2000
+	mkdir -p ~/_scratch/output/lom-out-64-2000
+	mkdir -p ~/_scratch/output/lom-out-128-2000

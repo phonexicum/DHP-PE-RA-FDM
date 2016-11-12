@@ -152,6 +152,7 @@ DHP_PE_RA_FDM::~DHP_PE_RA_FDM (){
     if (p_prev != NULL){
         delete [] p_prev; p_prev = NULL;
     }
+
     if (send_message_lr != NULL){
     delete [] send_message_lr; send_message_lr = NULL;
     }
@@ -182,6 +183,7 @@ DHP_PE_RA_FDM::~DHP_PE_RA_FDM (){
     if (send_reqs_5_star != NULL){
         delete [] send_reqs_5_star; send_reqs_5_star = NULL;
     }
+
     if (procParams.comm != MPI_COMM_WORLD){
         MPI_Comm_free(&procParams.comm);
     }
@@ -196,9 +198,9 @@ MPI_Comm DHP_PE_RA_FDM::PrepareMPIComm(const ProcParams& procParams_in, const in
     if (procParams_in.size < x_proc_num * y_proc_num)
         throw DHP_PE_RA_FDM_Exception("Not enough processes for requested computations.");
 
-    // cout << procParams_in.size << " " << grid_size_x << " " << grid_size_y << endl ;
     if (procParams_in.size > (grid_size_x+1) * (grid_size_y+1))
-        throw DHP_PE_RA_FDM_Exception("Can not scale computation of matrix to demanded amount of processes (amount of points in region < amount of processes).");
+        throw DHP_PE_RA_FDM_Exception("Can not scale computation of matrix to demanded amount of processes"
+            " (amount of points in region < amount of processes).");
 
     MPI_Comm newComm;
     if (procParams_in.rank < x_proc_num * y_proc_num){
@@ -241,13 +243,19 @@ void DHP_PE_RA_FDM::Compute (const ProcParams& procParams_in, const int x_proc_n
 
     double scalar_product_delta_g_and_g = 1;
     double scalar_product_delta_r_and_g = 1;
-    double alpha = 0; // equality to zero is important
+    double scalar_product_r_and_g = 1;
+    double alpha = 0;
     double tau = 0;
 
     // Computing step 1
     Initialize_P_and_Pprev();
     Dump_func(debug_fname, p_prev, "p_prev");
 
+    Initialize_F_border_with_zero(g);
+    Initialize_F_border_with_zero(r);
+    Initialize_F_border_with_zero(delta_p);
+    Initialize_F_border_with_zero(delta_g);
+    Initialize_F_border_with_zero(delta_r);
 
     iterations_counter = 0;
     while (true) {
@@ -255,16 +263,16 @@ void DHP_PE_RA_FDM::Compute (const ProcParams& procParams_in, const int x_proc_n
             cout << endl << "iterations_counter = " << iterations_counter << endl;
 
         // Computing step 2
-        Counting_5_star (p_prev, delta_p);
+        Counting_5_star(delta_p, p_prev);
         Dump_func(debug_fname, delta_p, "delta_p");
 
         // Computing step 3
-        Compute_r (delta_p, r);
+        Compute_r (r, delta_p);
         Dump_func(debug_fname, r, "r");
 
         if (iterations_counter >= descent_step_iterations){
             // Computing step 4
-            Counting_5_star (r, delta_r);
+            Counting_5_star(delta_r, r);
             Dump_func(debug_fname, delta_r, "delta_r");
 
             // Computing step 5
@@ -279,17 +287,27 @@ void DHP_PE_RA_FDM::Compute (const ProcParams& procParams_in, const int x_proc_n
         }
 
         // Computing step 7
-        Compute_g (g, r, alpha);
-        Dump_func(debug_fname, g, "g");
+        if (iterations_counter >= descent_step_iterations){
+            Compute_g (g, r, alpha);
+            Dump_func(debug_fname, g, "g");
+        } else {
+            swap(g, r); // g is r now !
+        }
 
         // Computing step 8
-        Counting_5_star (g, delta_g);
+        Counting_5_star(delta_g, g);
         Dump_func(debug_fname, delta_g, "delta_g");
 
         // Computing step 9
-        double scalar_product_r_and_g = ComputingScalarProduct(r, g);
-        if (debug and procParams.rank == 0)
-            cout << "scalar_product_r_and_g= " << scalar_product_r_and_g << endl;
+        if (iterations_counter >= descent_step_iterations){
+            scalar_product_r_and_g = ComputingScalarProduct(r, g);
+            if (debug and procParams.rank == 0)
+                cout << "scalar_product_r_and_g= " << scalar_product_r_and_g << endl;
+        } else {
+            scalar_product_r_and_g = ComputingScalarProduct(g, g); // because g is r now!
+            if (debug and procParams.rank == 0)
+                cout << "scalar_product_r_and_r= " << scalar_product_r_and_g << endl;
+        }
 
         // Computing step 10
         scalar_product_delta_g_and_g = ComputingScalarProduct(delta_g, g);
@@ -336,17 +354,16 @@ void DHP_PE_RA_FDM::Compute (const ProcParams& procParams_in, const int x_proc_n
 // ==================================================================================================================================================
 //                                                                                                              DHP_PE_RA_FDM::ComputingScalarProduct
 // ==================================================================================================================================================
-double DHP_PE_RA_FDM::ComputingScalarProduct(const double* const f, const double* const delta_f){
+double DHP_PE_RA_FDM::ComputingScalarProduct(const double* const f1, const double* const f2){
 
     double scalar_product = 0;
+
     #pragma omp parallel
-    {
-        // #pragma omp for schedule (static) reduction(+:scalar_product) collapse (2)
-        #pragma omp for schedule (static) reduction(+:scalar_product)
-        for (int j = 0; j < procCoords.y_cells_num; j++){
-            for (int i = 0; i < procCoords.x_cells_num; i++){
-                scalar_product += hx * hy * f[j * procCoords.x_cells_num + i] * delta_f[j * procCoords.x_cells_num + i];
-            }
+    // #pragma omp for schedule (static) reduction(+:scalar_product) collapse (2)
+    #pragma omp for schedule (static) reduction(+:scalar_product)
+    for (int j = 0; j < procCoords.y_cells_num; j++){
+        for (int i = 0; i < procCoords.x_cells_num; i++){
+            scalar_product += hx * hy * f1[j * procCoords.x_cells_num + i] * f2[j * procCoords.x_cells_num + i];
         }
     }
 
@@ -372,12 +389,10 @@ double DHP_PE_RA_FDM::ComputingScalarProduct(const double* const f, const double
 bool DHP_PE_RA_FDM::StopCriteria(const double* const f1, const double* const f2){
 
     // double norm = 0;
-    // #pragma omp parallel reduction(max:norm)
-    // {
-    //     #pragma omp for schedule (static)
-    //     for (int i = 0; i < procCoords.x_cells_num * procCoords.y_cells_num; i++){
-    //         norm = max(norm, abs(f1[i] - f2[i]));
-    //     }
+    // #pragma omp parallel
+    // #pragma omp for schedule (static) reduction(max:norm)
+    // for (int i = 0; i < procCoords.x_cells_num * procCoords.y_cells_num; i++){
+    //     norm = max(norm, abs(f1[i] - f2[i]));
     // }
 
     double norm = 0;
@@ -405,7 +420,7 @@ bool DHP_PE_RA_FDM::StopCriteria(const double* const f1, const double* const f2)
         MPI_MAX,                    // MPI_Op op,
         procParams.comm             // MPI_Comm comm
     );
-    if (ret != MPI_SUCCESS) throw DHP_PE_RA_FDM_Exception("Error reducing scalar_product.");
+    if (ret != MPI_SUCCESS) throw DHP_PE_RA_FDM_Exception("Error reducing stopCriteria.");
 
     return global_norm < eps;
 }
@@ -414,26 +429,24 @@ bool DHP_PE_RA_FDM::StopCriteria(const double* const f1, const double* const f2)
 // ==================================================================================================================================================
 //                                                                                                                     DHP_PE_RA_FDM::Counting_5_star
 // ==================================================================================================================================================
-void DHP_PE_RA_FDM::Counting_5_star (const double* const f, double* const delta_f){
+void DHP_PE_RA_FDM::Counting_5_star (double* const delta_f, const double* const f){
 
     int i = 0;
     int j = 0;
     int ret = MPI_SUCCESS;
 
     #pragma omp parallel
-    {
-        // #pragma omp for schedule (static) collapse (2)
-        #pragma omp for schedule (static) private(i)
-        for (j = 1; j < procCoords.y_cells_num -1; j++){
-            for (i = 1; i < procCoords.x_cells_num -1; i++){
-                delta_f[j * procCoords.x_cells_num + i] = (
-                        (f[j * procCoords.x_cells_num + i  ] - f[j * procCoords.x_cells_num + i-1]) / hx -
-                        (f[j * procCoords.x_cells_num + i+1] - f[j * procCoords.x_cells_num + i  ]) / hx
-                    ) / hx + (
-                        (f[ j    * procCoords.x_cells_num + i] - f[(j-1) * procCoords.x_cells_num + i]) / hy -
-                        (f[(j+1) * procCoords.x_cells_num + i] - f[ j    * procCoords.x_cells_num + i]) / hy
-                    ) / hy;
-            }
+    // #pragma omp for schedule (static) collapse (2)
+    #pragma omp for schedule (static) private(i)
+    for (j = 1; j < procCoords.y_cells_num -1; j++){
+        for (i = 1; i < procCoords.x_cells_num -1; i++){
+            delta_f[j * procCoords.x_cells_num + i] = (
+                    (f[j * procCoords.x_cells_num + i  ] - f[j * procCoords.x_cells_num + i-1]) / hx -
+                    (f[j * procCoords.x_cells_num + i+1] - f[j * procCoords.x_cells_num + i  ]) / hx
+                ) / hx + (
+                    (f[ j    * procCoords.x_cells_num + i] - f[(j-1) * procCoords.x_cells_num + i]) / hy -
+                    (f[(j+1) * procCoords.x_cells_num + i] - f[ j    * procCoords.x_cells_num + i]) / hy
+                ) / hy;
         }
     }
 
@@ -442,26 +455,27 @@ void DHP_PE_RA_FDM::Counting_5_star (const double* const f, double* const delta_
     // ==========================================
 
     if (send_message_lr == NULL)
-        send_message_lr = new double [max(procCoords.x_cells_num, procCoords.y_cells_num)];
+        send_message_lr = new double [procCoords.y_cells_num];
     if (send_message_rl == NULL)
-        send_message_rl = new double [max(procCoords.x_cells_num, procCoords.y_cells_num)];
+        send_message_rl = new double [procCoords.y_cells_num];
     if (send_message_td == NULL)
-        send_message_td = new double [max(procCoords.x_cells_num, procCoords.y_cells_num)];
+        send_message_td = new double [procCoords.x_cells_num];
     if (send_message_bu == NULL)
-        send_message_bu = new double [max(procCoords.x_cells_num, procCoords.y_cells_num)];
+        send_message_bu = new double [procCoords.x_cells_num];
     if (recv_message_lr == NULL)
-        recv_message_lr = new double [max(procCoords.x_cells_num, procCoords.y_cells_num)];
+        recv_message_lr = new double [procCoords.y_cells_num];
     if (recv_message_rl == NULL)
-        recv_message_rl = new double [max(procCoords.x_cells_num, procCoords.y_cells_num)];
+        recv_message_rl = new double [procCoords.y_cells_num];
     if (recv_message_td == NULL)
-        recv_message_td = new double [max(procCoords.x_cells_num, procCoords.y_cells_num)];
+        recv_message_td = new double [procCoords.x_cells_num];
     if (recv_message_bu == NULL)
-        recv_message_bu = new double [max(procCoords.x_cells_num, procCoords.y_cells_num)];
+        recv_message_bu = new double [procCoords.x_cells_num];
 
     // ==========================================
     // initialize send buffers
     // ==========================================
 
+    #pragma omp parallel
     #pragma omp sections private(i, j)
     {
         // left -> right
@@ -486,18 +500,20 @@ void DHP_PE_RA_FDM::Counting_5_star (const double* const f, double* const delta_
         }
     }
 
-
     int send_amount = 0;
     int recv_amount = 0;
 
-    #pragma omp sections
+    // #pragma omp parallel
+    // This parallelization works unstable because of nonblocking send/recv.
+    //      I expect that after omp thread is killed, OS kills some necessary information about ublocking send,
+    //      it leads to unstable behaviour near MPI_Wait for sended messages below. Sometimes MPI breaks killing process.
+    #pragma omp sections private (ret)
     {
         // ==========================================
         // send messages
         // ==========================================
         #pragma omp section
         {
-
             // left -> right
             if (not procCoords.right){
 
@@ -564,13 +580,11 @@ void DHP_PE_RA_FDM::Counting_5_star (const double* const f, double* const delta_
             }
         } // #pragma omp section
 
-
         // ==========================================
         // receive messages
         // ==========================================
         #pragma omp section
         {
-
             // left -> right
             if (not procCoords.left){
 
@@ -658,12 +672,12 @@ void DHP_PE_RA_FDM::Counting_5_star (const double* const f, double* const delta_
     // Counting squared regions n x m, where n > 1 and m > 1
     if (procCoords.x_cells_num > 1 and procCoords.y_cells_num > 1)
     {
-        // left -> right
-        i = 0;
-        if (not procCoords.left) {
-            #pragma omp parallel
-            {
-                #pragma omp for schedule (static)
+        #pragma omp parallel private(i, j)
+        {
+            // left -> right
+            if (not procCoords.left) {
+                i = 0;
+                #pragma omp for schedule (static) nowait
                 for (j = 1; j < procCoords.y_cells_num -1; j++){
                     delta_f[j * procCoords.x_cells_num + i] = (
                             (f[j * procCoords.x_cells_num + i  ] - recv_message_lr[j]               ) / hx -
@@ -674,22 +688,11 @@ void DHP_PE_RA_FDM::Counting_5_star (const double* const f, double* const delta_
                         ) / hy;
                 }
             }
-        } else {
-            #pragma omp parallel
-            {
-                #pragma omp for schedule (static)
-                for (j = 1; j < procCoords.y_cells_num -1; j++){
-                    delta_f[j * procCoords.x_cells_num + i] = 0;
-                }
-            }
-        }
 
-        // right -> left
-        i = procCoords.x_cells_num -1;
-        if (not procCoords.right) {
-            #pragma omp parallel
-            {
-                #pragma omp for schedule (static)
+            // right -> left
+            if (not procCoords.right) {
+                i = procCoords.x_cells_num -1;
+                #pragma omp for schedule (static) nowait
                 for (j = 1; j < procCoords.y_cells_num -1; j++){
                     delta_f[j * procCoords.x_cells_num + i] = (
                             (f[j * procCoords.x_cells_num + i  ] - f[j * procCoords.x_cells_num + i-1]) / hx -
@@ -700,22 +703,11 @@ void DHP_PE_RA_FDM::Counting_5_star (const double* const f, double* const delta_
                         ) / hy;
                 }
             }
-        } else {
-            #pragma omp parallel
-            {
-                #pragma omp for schedule (static)
-                for (j = 1; j < procCoords.y_cells_num -1; j++){
-                    delta_f[j * procCoords.x_cells_num + i] = 0;
-                }
-            }
-        }
 
-        // top -> down
-        j = 0;
-        if (not procCoords.top) {
-            #pragma omp parallel
-            {
-                #pragma omp for schedule (static)
+            // top -> down
+            if (not procCoords.top) {
+                j = 0;
+                #pragma omp for schedule (static) nowait
                 for (i = 1; i < procCoords.x_cells_num -1; i++){
                     delta_f[j * procCoords.x_cells_num + i] = (
                             (f[j * procCoords.x_cells_num + i  ] - f[j * procCoords.x_cells_num + i-1]) / hx -
@@ -726,22 +718,11 @@ void DHP_PE_RA_FDM::Counting_5_star (const double* const f, double* const delta_
                         ) / hy;
                 }
             }
-        } else {
-            #pragma omp parallel
-            {
-                #pragma omp for schedule (static)
-                for (i = 1; i < procCoords.x_cells_num -1; i++){
-                    delta_f[j * procCoords.x_cells_num + i] = 0;
-                }
-            }
-        }
 
-        // bottom -> up
-        j = procCoords.y_cells_num -1;
-        if (not procCoords.bottom) {
-            #pragma omp parallel
-            {
-                #pragma omp for schedule (static)
+            // bottom -> up
+            if (not procCoords.bottom) {
+                j = procCoords.y_cells_num -1;
+                #pragma omp for schedule (static) nowait
                 for (i = 1; i < procCoords.x_cells_num -1; i++){
                     delta_f[j * procCoords.x_cells_num + i] = (
                             (f[j * procCoords.x_cells_num + i  ] - f[j * procCoords.x_cells_num + i-1]) / hx -
@@ -752,20 +733,13 @@ void DHP_PE_RA_FDM::Counting_5_star (const double* const f, double* const delta_
                         ) / hy;
                 }
             }
-        } else {
-            #pragma omp parallel
-            {
-                #pragma omp for schedule (static)
-                for (i = 1; i < procCoords.x_cells_num -1; i++){
-                    delta_f[j * procCoords.x_cells_num + i] = 0;
-                }
-            }
         }
 
         // ==========================================
         // Counting delta_f's corners
         // ==========================================
 
+        #pragma omp parallel
         #pragma omp sections private(i, j)
         {
             #pragma omp section
@@ -780,8 +754,6 @@ void DHP_PE_RA_FDM::Counting_5_star (const double* const f, double* const delta_
                             (f[ j    * procCoords.x_cells_num + i] - recv_message_td [0]                  ) / hy -
                             (f[(j+1) * procCoords.x_cells_num + i] - f[ j    * procCoords.x_cells_num + i]) / hy
                         ) / hy;
-                } else {
-                    delta_f[j * procCoords.x_cells_num + i] = 0;
                 }
             }
 
@@ -797,8 +769,6 @@ void DHP_PE_RA_FDM::Counting_5_star (const double* const f, double* const delta_
                             (f[ j    * procCoords.x_cells_num + i] - recv_message_td [procCoords.x_cells_num -1] ) / hy -
                             (f[(j+1) * procCoords.x_cells_num + i] - f[ j    * procCoords.x_cells_num + i]) / hy
                         ) / hy;
-                } else {
-                    delta_f[j * procCoords.x_cells_num + i] = 0;
                 }
             }
 
@@ -814,8 +784,6 @@ void DHP_PE_RA_FDM::Counting_5_star (const double* const f, double* const delta_
                             (f[ j    * procCoords.x_cells_num + i] - f[(j-1) * procCoords.x_cells_num + i]) / hy -
                             (recv_message_bu [0]                   - f[ j    * procCoords.x_cells_num + i]) / hy
                         ) / hy;
-                } else {
-                    delta_f[j * procCoords.x_cells_num + i] = 0;
                 }
             }
 
@@ -831,8 +799,6 @@ void DHP_PE_RA_FDM::Counting_5_star (const double* const f, double* const delta_
                             (f[ j    * procCoords.x_cells_num + i] - f[(j-1) * procCoords.x_cells_num + i]) / hy -
                             (recv_message_bu [procCoords.x_cells_num -1] - f[ j    * procCoords.x_cells_num + i]) / hy
                         ) / hy;
-                } else {
-                    delta_f[j * procCoords.x_cells_num + i] = 0;
                 }
             }
         } // #pragma omp sections
@@ -845,25 +811,15 @@ void DHP_PE_RA_FDM::Counting_5_star (const double* const f, double* const delta_
         j = 0;
         if (not procCoords.top and not procCoords.bottom) {
             #pragma omp parallel
-            {
-                #pragma omp for schedule (static)
-                for (i = 1; i < procCoords.x_cells_num -1; i++){
-                    delta_f[j * procCoords.x_cells_num + i] = (
-                            (f[j * procCoords.x_cells_num + i  ] - f[j * procCoords.x_cells_num + i-1]) / hx -
-                            (f[j * procCoords.x_cells_num + i+1] - f[j * procCoords.x_cells_num + i  ]) / hx
-                        ) / hx + (
-                            (f[ j    * procCoords.x_cells_num + i] - recv_message_td[i]               ) / hy -
-                            (recv_message_bu[i]                    - f[j * procCoords.x_cells_num + i]) / hy
-                        ) / hy;
-                }
-            }
-        } else {
-            #pragma omp parallel
-            {
-                #pragma omp for schedule (static)
-                for (i = 1; i < procCoords.x_cells_num -1; i++){
-                    delta_f[j * procCoords.x_cells_num + i] = 0;
-                }
+            #pragma omp for schedule (static)
+            for (i = 1; i < procCoords.x_cells_num -1; i++){
+                delta_f[j * procCoords.x_cells_num + i] = (
+                        (f[j * procCoords.x_cells_num + i  ] - f[j * procCoords.x_cells_num + i-1]) / hx -
+                        (f[j * procCoords.x_cells_num + i+1] - f[j * procCoords.x_cells_num + i  ]) / hx
+                    ) / hx + (
+                        (f[ j    * procCoords.x_cells_num + i] - recv_message_td[i]               ) / hy -
+                        (recv_message_bu[i]                    - f[j * procCoords.x_cells_num + i]) / hy
+                    ) / hy;
             }
         }
 
@@ -871,6 +827,7 @@ void DHP_PE_RA_FDM::Counting_5_star (const double* const f, double* const delta_
         // Counting delta_f's corners
         // ==========================================
 
+        #pragma omp parallel
         #pragma omp sections private(i, j)
         {
             #pragma omp section
@@ -885,8 +842,6 @@ void DHP_PE_RA_FDM::Counting_5_star (const double* const f, double* const delta_
                             (f[ j    * procCoords.x_cells_num + i] - recv_message_td [0]                  ) / hy -
                             (recv_message_bu[0]                    - f[ j    * procCoords.x_cells_num + i]) / hy
                         ) / hy;
-                } else {
-                    delta_f[j * procCoords.x_cells_num + i] = 0;
                 }
             }
 
@@ -902,8 +857,6 @@ void DHP_PE_RA_FDM::Counting_5_star (const double* const f, double* const delta_
                             (f[ j    * procCoords.x_cells_num + i] - recv_message_td [procCoords.x_cells_num -1] ) / hy -
                             (recv_message_bu [procCoords.x_cells_num -1] - f[ j    * procCoords.x_cells_num + i]) / hy
                         ) / hy;
-                } else {
-                    delta_f[j * procCoords.x_cells_num + i] = 0;
                 }
             }
         } // #pragma omp sections
@@ -916,25 +869,15 @@ void DHP_PE_RA_FDM::Counting_5_star (const double* const f, double* const delta_
         i = 0;
         if (not procCoords.left and not procCoords.right) {
             #pragma omp parallel
-            {
-                #pragma omp for schedule (static)
-                for (j = 1; j < procCoords.y_cells_num -1; j++){
-                    delta_f[j * procCoords.x_cells_num + i] = (
-                            (f[j * procCoords.x_cells_num + i  ] - recv_message_lr[j]               ) / hx -
-                            (recv_message_rl[j]                  - f[j * procCoords.x_cells_num + i]) / hx
-                        ) / hx + (
-                            (f[ j    * procCoords.x_cells_num + i] - f[(j-1) * procCoords.x_cells_num + i]) / hy -
-                            (f[(j+1) * procCoords.x_cells_num + i] - f[ j    * procCoords.x_cells_num + i]) / hy
-                        ) / hy;
-                }
-            }
-        } else {
-            #pragma omp parallel
-            {
-                #pragma omp for schedule (static)
-                for (j = 1; j < procCoords.y_cells_num -1; j++){
-                    delta_f[j * procCoords.x_cells_num + i] = 0;
-                }
+            #pragma omp for schedule (static)
+            for (j = 1; j < procCoords.y_cells_num -1; j++){
+                delta_f[j * procCoords.x_cells_num + i] = (
+                        (f[j * procCoords.x_cells_num + i  ] - recv_message_lr[j]               ) / hx -
+                        (recv_message_rl[j]                  - f[j * procCoords.x_cells_num + i]) / hx
+                    ) / hx + (
+                        (f[ j    * procCoords.x_cells_num + i] - f[(j-1) * procCoords.x_cells_num + i]) / hy -
+                        (f[(j+1) * procCoords.x_cells_num + i] - f[ j    * procCoords.x_cells_num + i]) / hy
+                    ) / hy;
             }
         }
 
@@ -942,6 +885,7 @@ void DHP_PE_RA_FDM::Counting_5_star (const double* const f, double* const delta_
         // Counting delta_f's corners
         // ==========================================
 
+        #pragma omp parallel
         #pragma omp sections private(i, j)
         {
             #pragma omp section
@@ -956,8 +900,6 @@ void DHP_PE_RA_FDM::Counting_5_star (const double* const f, double* const delta_
                             (f[ j    * procCoords.x_cells_num + i] - recv_message_td [0]                  ) / hy -
                             (f[(j+1) * procCoords.x_cells_num + i] - f[ j    * procCoords.x_cells_num + i]) / hy
                         ) / hy;
-                } else {
-                    delta_f[j * procCoords.x_cells_num + i] = 0;
                 }
             }
 
@@ -973,8 +915,6 @@ void DHP_PE_RA_FDM::Counting_5_star (const double* const f, double* const delta_
                             (f[ j    * procCoords.x_cells_num + i] - f[(j-1) * procCoords.x_cells_num + i]) / hy -
                             (recv_message_bu [0]                   - f[ j    * procCoords.x_cells_num + i]) / hy
                         ) / hy;
-                } else {
-                    delta_f[j * procCoords.x_cells_num + i] = 0;
                 }
             }
         } // #pragma omp sections
@@ -992,8 +932,6 @@ void DHP_PE_RA_FDM::Counting_5_star (const double* const f, double* const delta_
                     (f[ j    * procCoords.x_cells_num + i] - recv_message_td[0]                   ) / hy -
                     (recv_message_bu [0]                   - f[ j    * procCoords.x_cells_num + i]) / hy
                 ) / hy;
-        } else {
-            delta_f[j * procCoords.x_cells_num + i] = 0;
         }
     }
 
@@ -1007,8 +945,49 @@ void DHP_PE_RA_FDM::Counting_5_star (const double* const f, double* const delta_
         MPI_STATUS_IGNORE   // MPI_Status array_of_statuses[]
     );
 
-    if (ret != MPI_SUCCESS) throw DHP_PE_RA_FDM_Exception("Error waiting for sends after previous Counting_5_star.");
+    if (ret != MPI_SUCCESS) throw DHP_PE_RA_FDM_Exception("Error waiting for sends after last Counting_5_star.");
 
+}
+
+
+// ==================================================================================================================================================
+//                                                                                                       DHP_PE_RA_FDM::Initialize_F_border_with_zero
+// ==================================================================================================================================================
+void DHP_PE_RA_FDM::Initialize_F_border_with_zero (double* const f){
+    
+    // boundary region
+    if (procCoords.top){
+        #pragma omp parallel
+        #pragma omp for schedule(static)
+        for (int i = 0; i < procCoords.x_cells_num; i++){
+            f[0 * procCoords.x_cells_num + i] = 0;
+        }
+
+        // memset(f, 0, procCoords.x_cells_num * sizeof(*f));
+    }
+    if (procCoords.bottom){
+        #pragma omp parallel
+        #pragma omp for schedule(static)
+        for (int i = 0; i < procCoords.x_cells_num; i++){
+            f[(procCoords.y_cells_num -1) * procCoords.x_cells_num + i] = 0;
+        }
+
+        // memset(f + (procCoords.y_cells_num -1) * procCoords.x_cells_num, 0, procCoords.x_cells_num * sizeof(*f));
+    }
+    if (procCoords.left){
+        #pragma omp parallel
+        #pragma omp for schedule (static)
+        for (int j = 0; j < procCoords.y_cells_num; j++){
+            f[j * procCoords.x_cells_num + 0] = 0;
+        }
+    }
+    if (procCoords.right){
+        #pragma omp parallel
+        #pragma omp for schedule (static)
+        for (int j = 0; j < procCoords.y_cells_num; j++){
+            f[j * procCoords.x_cells_num + (procCoords.x_cells_num -1)] = 0;
+        }
+    }
 }
 
 
@@ -1020,14 +999,14 @@ void DHP_PE_RA_FDM::Initialize_P_and_Pprev (){
     {
         // boundary region
         if (procCoords.top){
-            #pragma omp for schedule (guided)
+            #pragma omp for schedule (static)
             for (int i = 0; i < procCoords.x_cells_num; i++){
                 p_prev[0 * procCoords.x_cells_num + i] = fi(X1 + (procCoords.x_cell_pos + i) * hx, Y1 + (procCoords.y_cell_pos + 0) * hy);
                 p[0 * procCoords.x_cells_num + i] = fi(X1 + (procCoords.x_cell_pos + i) * hx, Y1 + (procCoords.y_cell_pos + 0) * hy);
             }
         }
         if (procCoords.bottom){
-            #pragma omp for schedule (guided)
+            #pragma omp for schedule (static)
             for (int i = 0; i < procCoords.x_cells_num; i++){
                 p_prev[(procCoords.y_cells_num -1) * procCoords.x_cells_num + i] =
                     fi(X1 + (procCoords.x_cell_pos + i) * hx, Y1 + (procCoords.y_cell_pos + (procCoords.y_cells_num -1)) * hy);
@@ -1036,14 +1015,14 @@ void DHP_PE_RA_FDM::Initialize_P_and_Pprev (){
             }
         }
         if (procCoords.left){
-            #pragma omp for schedule (guided)
+            #pragma omp for schedule (static)
             for (int j = 0; j < procCoords.y_cells_num; j++){
                 p_prev[j * procCoords.x_cells_num + 0] = fi(X1 + (procCoords.x_cell_pos + 0) * hx, Y1 + (procCoords.y_cell_pos + j) * hy);
                 p[j * procCoords.x_cells_num + 0] = fi(X1 + (procCoords.x_cell_pos + 0) * hx, Y1 + (procCoords.y_cell_pos + j) * hy);
             }
         }
         if (procCoords.right){
-            #pragma omp for schedule (guided)
+            #pragma omp for schedule (static)
             for (int j = 0; j < procCoords.y_cells_num; j++){
                 p_prev[j * procCoords.x_cells_num + (procCoords.x_cells_num -1)] =
                     fi(X1 + (procCoords.x_cell_pos + (procCoords.x_cells_num -1)) * hx, Y1 + (procCoords.y_cell_pos + j) * hy);
@@ -1053,7 +1032,7 @@ void DHP_PE_RA_FDM::Initialize_P_and_Pprev (){
         }
 
         // internal region
-        #pragma omp for schedule (guided)
+        #pragma omp for schedule (static)
         for (int j = static_cast<int>(procCoords.top); j < procCoords.y_cells_num - static_cast<int>(procCoords.bottom); j++){
             memset(&(p_prev[j * procCoords.x_cells_num + static_cast<int>(procCoords.left)]), 0,
                 (procCoords.x_cells_num - static_cast<int>(procCoords.right) - static_cast<int>(procCoords.left)) * sizeof(*p_prev));
@@ -1069,43 +1048,19 @@ void DHP_PE_RA_FDM::Initialize_P_and_Pprev (){
 // ==================================================================================================================================================
 //                                                                                                                           DHP_PE_RA_FDM::Compute_r
 // ==================================================================================================================================================
-void DHP_PE_RA_FDM::Compute_r (const double* const delta_p, double* const r) const{
+void DHP_PE_RA_FDM::Compute_r (double* const r, const double* const delta_p) const{
+    
+    // internal region
+    
     #pragma omp parallel
-    {
-        // boundary region
-        if (procCoords.top){
-
-            memset(&(r[0 * procCoords.x_cells_num + 0]), 0,
-                procCoords.x_cells_num * sizeof(*r));
-        }
-        if (procCoords.bottom){
-
-            memset(&(r[(procCoords.y_cells_num -1) * procCoords.x_cells_num + 0]), 0,
-                procCoords.x_cells_num * sizeof(*r));
-        }
-        if (procCoords.left){
-            #pragma omp for schedule (guided)
-            for (int j = 0; j < procCoords.y_cells_num; j++){
-                r[j * procCoords.x_cells_num + 0] = 0;
-            }
-        }
-        if (procCoords.right){
-            #pragma omp for schedule (guided)
-            for (int j = 0; j < procCoords.y_cells_num; j++){
-                r[j * procCoords.x_cells_num + (procCoords.x_cells_num -1)] = 0;
-            }
-        }
-
-        // internal region
-        // #pragma omp for schedule (guided) collapse (2)
-        #pragma omp for schedule (guided)
-        for (int j = static_cast<int>(procCoords.top); j < procCoords.y_cells_num - static_cast<int>(procCoords.bottom); j++){
-            for (int i = static_cast<int>(procCoords.left); i < procCoords.x_cells_num - static_cast<int>(procCoords.right); i++){
-                r[j * procCoords.x_cells_num + i] =
-                    delta_p[j * procCoords.x_cells_num + i] -
-                    F(X1 + (procCoords.x_cell_pos + i) * hx, Y1 + (procCoords.y_cell_pos + j) * hy)
-                    ;
-            }
+    // #pragma omp for schedule (static) collapse (2)
+    #pragma omp for schedule (static)
+    for (int j = static_cast<int>(procCoords.top); j < procCoords.y_cells_num - static_cast<int>(procCoords.bottom); j++){
+        for (int i = static_cast<int>(procCoords.left); i < procCoords.x_cells_num - static_cast<int>(procCoords.right); i++){
+            r[j * procCoords.x_cells_num + i] =
+                delta_p[j * procCoords.x_cells_num + i] -
+                F(X1 + (procCoords.x_cell_pos + i) * hx, Y1 + (procCoords.y_cell_pos + j) * hy)
+            ;
         }
     }
 }
@@ -1115,50 +1070,16 @@ void DHP_PE_RA_FDM::Compute_r (const double* const delta_p, double* const r) con
 //                                                                                                                           DHP_PE_RA_FDM::Compute_g
 // ==================================================================================================================================================
 void DHP_PE_RA_FDM::Compute_g (double* const g, const double* const r, const double alpha) const{
+
+    // internal region
+    
     #pragma omp parallel
-    {
-        // boundary region
-        if (procCoords.top){
-
-            memset(&(g[0 * procCoords.x_cells_num + 0]), 0,
-                procCoords.x_cells_num * sizeof(*g));
+    // #pragma omp for schedule (static) collapse (2)
+    #pragma omp for schedule (static)
+    for (int j = static_cast<int>(procCoords.top); j < procCoords.y_cells_num - static_cast<int>(procCoords.bottom); j++){
+        for (int i = static_cast<int>(procCoords.left); i < procCoords.x_cells_num - static_cast<int>(procCoords.right); i++){
+            g[j * procCoords.x_cells_num + i] = r[j * procCoords.x_cells_num + i] - alpha * g[j * procCoords.x_cells_num + i];
         }
-        if (procCoords.bottom){
-
-            memset(&(g[(procCoords.y_cells_num -1) * procCoords.x_cells_num + 0]), 0,
-                procCoords.x_cells_num * sizeof(*g));
-        }
-        if (procCoords.left){
-            #pragma omp for schedule (guided)
-            for (int j = 0; j < procCoords.y_cells_num; j++){
-                g[j * procCoords.x_cells_num + 0] = 0;
-            }
-        }
-        if (procCoords.right){
-            #pragma omp for schedule (guided)
-            for (int j = 0; j < procCoords.y_cells_num; j++){
-                g[j * procCoords.x_cells_num + (procCoords.x_cells_num -1)] = 0;
-            }
-        }
-
-        // internal region
-        if (iterations_counter >= descent_step_iterations){
-            // #pragma omp for schedule (guided) collapse (2)
-            #pragma omp for schedule (guided)
-            for (int j = static_cast<int>(procCoords.top); j < procCoords.y_cells_num - static_cast<int>(procCoords.bottom); j++){
-                for (int i = static_cast<int>(procCoords.left); i < procCoords.x_cells_num - static_cast<int>(procCoords.right); i++){
-                    g[j * procCoords.x_cells_num + i] = r[j * procCoords.x_cells_num + i] - alpha * g[j * procCoords.x_cells_num + i];
-                }
-            }
-        } else {
-            // #pragma omp for schedule (guided) collapse (2)
-            #pragma omp for schedule (guided)
-            for (int j = static_cast<int>(procCoords.top); j < procCoords.y_cells_num - static_cast<int>(procCoords.bottom); j++){
-                for (int i = static_cast<int>(procCoords.left); i < procCoords.x_cells_num - static_cast<int>(procCoords.right); i++){
-                    g[j * procCoords.x_cells_num + i] = r[j * procCoords.x_cells_num + i];
-                }
-            }
-        }   
     }
 }
 
@@ -1167,14 +1088,15 @@ void DHP_PE_RA_FDM::Compute_g (double* const g, const double* const r, const dou
 //                                                                                                                           DHP_PE_RA_FDM::Compute_p
 // ==================================================================================================================================================
 void DHP_PE_RA_FDM::Compute_p (const double tau, const double* const g) {
+
+    // internal region
+    
     #pragma omp parallel
-    {
-        // #pragma omp for schedule (guided) collapse (2)
-        #pragma omp for schedule (guided)
-        for (int j = static_cast<int>(procCoords.top); j < procCoords.y_cells_num - static_cast<int>(procCoords.bottom); j++){
-            for (int i = static_cast<int>(procCoords.left); i < procCoords.x_cells_num - static_cast<int>(procCoords.right); i++){
-                p[j * procCoords.x_cells_num + i] = p_prev[j * procCoords.x_cells_num + i] - tau * g[j * procCoords.x_cells_num + i];
-            }
+    // #pragma omp for schedule (static) collapse (2)
+    #pragma omp for schedule (static)
+    for (int j = static_cast<int>(procCoords.top); j < procCoords.y_cells_num - static_cast<int>(procCoords.bottom); j++){
+        for (int i = static_cast<int>(procCoords.left); i < procCoords.x_cells_num - static_cast<int>(procCoords.right); i++){
+            p[j * procCoords.x_cells_num + i] = p_prev[j * procCoords.x_cells_num + i] - tau * g[j * procCoords.x_cells_num + i];
         }
     }
 }

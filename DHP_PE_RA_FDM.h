@@ -46,7 +46,7 @@ struct ProcParams {
 // ==================================================================================================================================================
 //                                                                                                                                ProcComputingCoords
 // ==================================================================================================================================================
-// Structure for storing coords of computing area of corrent process
+// Structure for storing coords of computing area of current process
 // 
 struct ProcComputingCoords {
 
@@ -80,7 +80,7 @@ struct ProcComputingCoords {
 //          five-point difference equation for Laplace operator approximation
 //          grid fragmentation are regular
 //          MPI technology for counting under supercomputers
-//          scalar product: (a, b) = \sum_{i=1}^{i=n-1} ( \sum_{j=1}^{j=m-1} ( h'i * h'j * a(i, j) * b(i, j) ))
+//          scalar product: (a, b) = \sum_{i=1}^{i=n-1} ( \sum_{j=1}^{j=m-1} ( h_i * h_j * a(i, j) * b(i, j) ))
 // 
 //      boundary conditions: function 'fi'
 //      right side of Laplace operator: function 'F'
@@ -142,16 +142,17 @@ class DHP_PE_RA_FDM {
         private:
 
     // This function computes five-point difference equation for Laplace operator approximation for function f and stores result into delta_f
-    void Counting_5_star (const double* const f, double* const delta_f);
+    void Counting_5_star (double* const delta_f, const double* const f);
 
     // This function computes scalar product of two functions. Scalar product ignores function values on the boundaries
     // 
     //  return value: global scalar_product of two functions for each of the processes
     //  
-    double ComputingScalarProduct (const double* const f, const double* const delta_f);
+    double ComputingScalarProduct (const double* const f1, const double* const f2);
 
+    void Initialize_F_border_with_zero (double* const f);
     void Initialize_P_and_Pprev ();
-    void Compute_r (const double* const delta_p, double* const r) const;
+    void Compute_r (double* const r, const double* const delta_p) const;
     void Compute_g (double* const g, const double* const r, const double alpha) const;
     void Compute_p (const double tau, const double* const g);
 
@@ -167,7 +168,8 @@ class DHP_PE_RA_FDM {
     double* p_prev;
 
     // in spite of the fact that this variables is temporal and used only in Counting_5_star and ComputingScalarProduct functions,
-    // they are too oftenly used, to be allocated on each iteration of computing process
+    // they are too oftenly used, to be allocated on each iteration of computing process, that is why I allocate them
+    // at the beginning of computing process
     double* send_message_lr;
     double* send_message_rl;
     double* send_message_td;
