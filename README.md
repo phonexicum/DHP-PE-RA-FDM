@@ -93,17 +93,17 @@ mpisubmit.bg -n 1024 -m smp -w 00:02:00 -t PREFER_TORUS
 Lomonosov execute tasks in context of `~/_scratch` directory.
 
 ```
-sbatch -p test -n 1 --time=0-00:07:00 impi ./superPrac2 1000 0.0001 output/lom-out-1-1000 # 5:20 sec
-sbatch -p regular4 -n 1 --time=0-00:59:30 impi ./superPrac2 2000 0.0001 output/lom-out-1-2000 # 42:00 sec
+sbatch -p test -n 1 --time=0-00:07:00 impi ./superPrac2 1000 0.0001 output/lom-out-1-1000 # 5:09 sec
+sbatch -p regular4 -n 1 --time=0-00:59:30 impi ./superPrac2 2000 0.0001 output/lom-out-1-2000 # 41:10 sec
 
-sbatch -p test -n 8 --time=0-00:01:00 impi ./superPrac2 1000 0.0001 output/lom-out-8-1000 # 39 sec
-sbatch -p test -n 8 --time=0-00:07:00 impi ./superPrac2 2000 0.0001 output/lom-out-8-2000 # 5:15 sec
-sbatch -p test -n 16 --time=0-00:01:00 impi ./superPrac2 1000 0.0001 output/lom-out-16-1000 # 19 sec
-sbatch -p test -n 16 --time=0-00:03:50 impi ./superPrac2 2000 0.0001 output/lom-out-16-2000 # 2:40 sec
-sbatch -p test -n 32 --time=0-00:00:30 impi ./superPrac2 1000 0.0001 output/lom-out-32-1000 # 10 sec
-sbatch -p test -n 32 --time=0-00:02:00 impi ./superPrac2 2000 0.0001 output/lom-out-32-2000 # 1:20 sec
-sbatch -p test -n 64 --time=0-00:00:30 impi ./superPrac2 1000 0.0001 output/lom-out-64-1000 # 5 sec
-sbatch -p test -n 64 --time=0-00:02:00 impi ./superPrac2 2000 0.0001 output/lom-out-64-2000 # 40 sec
-sbatch -p test -n 128 --time=0-00:00:30 impi ./superPrac2 1000 0.0001 output/lom-out-128-1000 # 3 sec
-sbatch -p test -n 128 --time=0-00:01:00 impi ./superPrac2 2000 0.0001 output/lom-out-128-2000 # 20 sec
+sbatch -p test -n 8 --time=0-00:01:00 impi ./superPrac2 1000 0.0001 output/lom-out-8-1000 # 0:39 sec
+sbatch -p test -n 8 --time=0-00:07:00 impi ./superPrac2 2000 0.0001 output/lom-out-8-2000 # 5:11 sec
+sbatch -p test -n 16 --time=0-00:01:00 impi ./superPrac2 1000 0.0001 output/lom-out-16-1000 # 0:19 sec
+sbatch -p test -n 16 --time=0-00:03:50 impi ./superPrac2 2000 0.0001 output/lom-out-16-2000 # 2:36 sec
+sbatch -p test -n 32 --time=0-00:00:30 impi ./superPrac2 1000 0.0001 output/lom-out-32-1000 # 0:9 sec
+sbatch -p test -n 32 --time=0-00:02:00 impi ./superPrac2 2000 0.0001 output/lom-out-32-2000 # 1:18 sec
+sbatch -p test -n 64 --time=0-00:00:10 impi ./superPrac2 1000 0.0001 output/lom-out-64-1000 # 0:5 sec
+sbatch -p test -n 64 --time=0-00:02:00 impi ./superPrac2 2000 0.0001 output/lom-out-64-2000 # 0:39 sec
+sbatch -p test -n 128 --time=0-00:00:10 impi ./superPrac2 1000 0.0001 output/lom-out-128-1000 # 0:2 sec
+sbatch -p test -n 128 --time=0-00:01:00 impi ./superPrac2 2000 0.0001 output/lom-out-128-2000 # 0:19 sec
 ```
