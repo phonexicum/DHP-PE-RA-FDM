@@ -1,6 +1,6 @@
 # DHP_PE_RA_FDM
 
-`mpi-cuda` branch is created to write DHP-PE-RA-FDM algorithm with cuda acceleration for ***Tesla X2070*** videocards under lomonosov supercomputer.
+`mpi-cuda` branch is created to write DHP-PE-RA-FDM algorithm with cuda acceleration for ***Tesla X2070*** videocards under lomonosov supercomputer. This code is not really flexible for various video-cards.
 
 ***DHP_PE_RA_FDM*** - Dirichlet-Problem-Poisson's-Equation-Rectangular-Area-Finite-Difference-Method
 

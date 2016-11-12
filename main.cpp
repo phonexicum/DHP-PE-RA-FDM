@@ -127,21 +127,12 @@ void DHP_PE_RA_FDM_superprac::Print_p (const string& dout_name) const{
     ProcParams procParams = getProcParams();
     ProcComputingCoords procCoords = getProcCoords();
 
-    // fstream fout(string("./") + dout_name + string("/output.txt.") + to_string(procParams.rank), fstream::out);
     stringstream ss;
     ss << "./" << dout_name << "/output.txt." << procParams.rank;
     fstream fout(ss.str().c_str(), fstream::out);
-    // FILE* fout = fopen(dout_name.c_str(), "a");
-
-    // This will block until file will get free
-    // while (flock (fileno(fout), LOCK_EX) != 0){
-    //     usleep(100000); // = 0.1 second // microseconds
-    // }
 
     double* p = getSolutionPerProcess();
 
-    // fprintf(fout, "# x y z\n");
-    // fout << "# x y z" << endl;
     fout << "[" << endl;
     for (int j = 0; j < procCoords.y_cells_num; j++){
         for (int i = 0; i < procCoords.x_cells_num; i++){
@@ -157,18 +148,13 @@ void DHP_PE_RA_FDM_superprac::Print_p (const string& dout_name) const{
                 fout << "}" << endl;
             else
                 fout << "}," << endl;
-            // fprintf (fout, "%f %f %f\n", X1 + (procCoords.x_cell_pos + i) * hx, Y1 + (procCoords.y_cell_pos + j) * hy, p[j * procCoords.x_cells_num + i]);
         }
-        // fprintf (fout, "\n");
     }
     fout << "]" << endl;
 
-    // free file lock
-    // flock (fileno(fout), LOCK_UN);
-
     fout.close();
-    // fclose(fout);
 }
+
 
 // ==================================================================================================================================================
 //                                                                                                                             GetVideoCardProperties

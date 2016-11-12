@@ -151,10 +151,15 @@ debug_fname (string("debug.txt"))
                                        " memory must be able to be mapped and UAD must be enabled.");
     }
     if (devProp.maxThreadsPerBlock * devProp.maxGridSize[0] < grid_size_x_ +1 or
-        devProp.maxThreadsPerBlock * devProp.maxGridSize[0] < grid_size_y_ +1 ){
+        devProp.maxThreadsPerBlock * devProp.maxGridSize[0] < grid_size_y_ +1 or
+        devProp.maxThreadsPerBlock * devProp.maxGridSize[0] < (grid_size_x_ +1) * (grid_size_y_ +1)
+        ){
         throw DHP_PE_RA_FDM_Exception ("Hardware does not fit this program. Device's devProp.maxThreadsPerBlock * devProp.maxGridSize[0]"
-            "can not fit even matrix one row.");
+            "less than mount of matrix cells.");
     }
+
+    for (int i = 0; i < cudaStreams_num; i++)
+        SAFE_CUDA(cudaStreamCreate(cudaStreams + i));
 }
 
 
@@ -163,10 +168,10 @@ debug_fname (string("debug.txt"))
 // ==================================================================================================================================================
 DHP_PE_RA_FDM::~DHP_PE_RA_FDM (){
     if (p != NULL){
-        SAFE_CUDA(cudaFreeHost(p)); p = NULL;
+        SAFE_CUDA(cudaFree(p)); p = NULL;
     }
     if (p_prev != NULL){
-        SAFE_CUDA(cudaFreeHost(p_prev)); p_prev = NULL;
+        SAFE_CUDA(cudaFree(p_prev)); p_prev = NULL;
     }
     if (send_message_lr != NULL){
         SAFE_CUDA(cudaFreeHost(send_message_lr)); send_message_lr = NULL;
@@ -201,6 +206,9 @@ DHP_PE_RA_FDM::~DHP_PE_RA_FDM (){
     if (procParams.comm != MPI_COMM_WORLD){
         MPI_Comm_free(&procParams.comm);
     }
+
+    for (int i = 0; i < cudaStreams_num; i++)
+        SAFE_CUDA(cudaStreamDestroy(cudaStreams[i]));
 }
 
 
@@ -253,13 +261,13 @@ void DHP_PE_RA_FDM::Compute (const ProcParams& procParams_in, const int x_proc_n
     double* delta_g = NULL;
     double* delta_r = NULL;
     
-    SAFE_CUDA(cudaHostAlloc(&p,       procCoords.x_cells_num * procCoords.y_cells_num * sizeof(*p),       cudaHostAllocMapped));
-    SAFE_CUDA(cudaHostAlloc(&p_prev,  procCoords.x_cells_num * procCoords.y_cells_num * sizeof(*p_prev),  cudaHostAllocMapped));
-    SAFE_CUDA(cudaHostAlloc(&g,       procCoords.x_cells_num * procCoords.y_cells_num * sizeof(*g),       cudaHostAllocMapped));
-    SAFE_CUDA(cudaHostAlloc(&r,       procCoords.x_cells_num * procCoords.y_cells_num * sizeof(*r),       cudaHostAllocMapped));
-    SAFE_CUDA(cudaHostAlloc(&delta_p, procCoords.x_cells_num * procCoords.y_cells_num * sizeof(*delta_p), cudaHostAllocMapped));
-    SAFE_CUDA(cudaHostAlloc(&delta_g, procCoords.x_cells_num * procCoords.y_cells_num * sizeof(*delta_g), cudaHostAllocMapped));
-    SAFE_CUDA(cudaHostAlloc(&delta_r, procCoords.x_cells_num * procCoords.y_cells_num * sizeof(*delta_r), cudaHostAllocMapped));
+    SAFE_CUDA(cudaMalloc(&p,       procCoords.x_cells_num * procCoords.y_cells_num * sizeof(*p)));
+    SAFE_CUDA(cudaMalloc(&p_prev,  procCoords.x_cells_num * procCoords.y_cells_num * sizeof(*p_prev)));
+    SAFE_CUDA(cudaMalloc(&g,       procCoords.x_cells_num * procCoords.y_cells_num * sizeof(*g)));
+    SAFE_CUDA(cudaMalloc(&r,       procCoords.x_cells_num * procCoords.y_cells_num * sizeof(*r)));
+    SAFE_CUDA(cudaMalloc(&delta_p, procCoords.x_cells_num * procCoords.y_cells_num * sizeof(*delta_p)));
+    SAFE_CUDA(cudaMalloc(&delta_g, procCoords.x_cells_num * procCoords.y_cells_num * sizeof(*delta_g)));
+    SAFE_CUDA(cudaMalloc(&delta_r, procCoords.x_cells_num * procCoords.y_cells_num * sizeof(*delta_r)));
 
     double scalar_product_delta_g_and_g = 1;
     double scalar_product_delta_r_and_g = 1;
@@ -268,8 +276,11 @@ void DHP_PE_RA_FDM::Compute (const ProcParams& procParams_in, const int x_proc_n
 
     // Computing step 1
     // Initialize_P_and_Pprev();
-    cuda_Initialize_P_and_Pprev ();
+    cuda_Initialize_P_and_Pprev();
     Dump_func(debug_fname, p_prev, "p_prev");
+
+    cuda_Initialize_F_border_with_zero(r);
+    cuda_Initialize_F_border_with_zero(g);
 
 
     iterations_counter = 0;
@@ -278,7 +289,8 @@ void DHP_PE_RA_FDM::Compute (const ProcParams& procParams_in, const int x_proc_n
             cout << endl << "iterations_counter = " << iterations_counter << endl;
 
         // Computing step 2
-        Counting_5_star (p_prev, delta_p);
+        // Counting_5_star (p_prev, delta_p);
+        cuda_Counting_5_star(p_prev, delta_p);
         Dump_func(debug_fname, delta_p, "delta_p");
 
         // Computing step 3
@@ -287,7 +299,8 @@ void DHP_PE_RA_FDM::Compute (const ProcParams& procParams_in, const int x_proc_n
 
         if (iterations_counter >= descent_step_iterations){
             // Computing step 4
-            Counting_5_star (r, delta_r);
+            // Counting_5_star (r, delta_r);
+            cuda_Counting_5_star(r, delta_r);
             Dump_func(debug_fname, delta_r, "delta_r");
 
             // Computing step 5
@@ -306,7 +319,8 @@ void DHP_PE_RA_FDM::Compute (const ProcParams& procParams_in, const int x_proc_n
         Dump_func(debug_fname, g, "g");
 
         // Computing step 8
-        Counting_5_star (g, delta_g);
+        // Counting_5_star (g, delta_g);
+        cuda_Counting_5_star(g, delta_g);
         Dump_func(debug_fname, delta_g, "delta_g");
 
         // Computing step 9
@@ -348,11 +362,11 @@ void DHP_PE_RA_FDM::Compute (const ProcParams& procParams_in, const int x_proc_n
         iterations_counter++;
     }
 
-    SAFE_CUDA(cudaFreeHost(g)); g = NULL;
-    SAFE_CUDA(cudaFreeHost(r)); r = NULL;
-    SAFE_CUDA(cudaFreeHost(delta_p)); delta_p = NULL;
-    SAFE_CUDA(cudaFreeHost(delta_g)); delta_g = NULL;
-    SAFE_CUDA(cudaFreeHost(delta_r)); delta_r = NULL;
+    SAFE_CUDA(cudaFree(g)); g = NULL;
+    SAFE_CUDA(cudaFree(r)); r = NULL;
+    SAFE_CUDA(cudaFree(delta_p)); delta_p = NULL;
+    SAFE_CUDA(cudaFree(delta_g)); delta_g = NULL;
+    SAFE_CUDA(cudaFree(delta_r)); delta_r = NULL;
 }
 
 
@@ -903,7 +917,6 @@ void DHP_PE_RA_FDM::Counting_5_star (const double* const f, double* const delta_
     );
 
     if (ret != MPI_SUCCESS) throw DHP_PE_RA_FDM_Exception("Error waiting for sends after previous Counting_5_star.");
-
 }
 
 

@@ -106,6 +106,9 @@ struct ProcComputingCoords {
 // 
 // Dirichlet-Problem-Poisson's-Equation-Rectangular-Area-Finite-Difference-Method
 // 
+// Я храню массивы внутри GPU
+// 
+// 
 #define fi(x, y) (x*x + y*y)/((1 + x*y)*(1 + x*y))
 #define F(x, y) logf(1 + x*y)
 // 
@@ -150,10 +153,17 @@ class DHP_PE_RA_FDM {
 
     MPI_Comm PrepareMPIComm (const ProcParams& procParams_in, const int x_proc_num, const int y_proc_num) const;
 
+
         private:
+
+    cudaDeviceProp devProp;
+    pair<dim3, dim3> GridDistribute (const int demandedThreadNum);
+    void cudaAllStreamsSynchronize (const int begin = 0, const int end = (cudaStreams_num -1));
+
 
     // This function computes five-point difference equation for Laplace operator approximation for function f and stores result into delta_f
     void Counting_5_star (const double* const f, double* const delta_f);
+    void cuda_Counting_5_star (const double* const f, double* const delta_f);
 
     // This function computes scalar product of two functions. Scalar product ignores function values on the boundaries
     // 
@@ -162,23 +172,25 @@ class DHP_PE_RA_FDM {
     double ComputingScalarProduct (const double* const f, const double* const delta_f);
 
     void Initialize_P_and_Pprev ();
+    void cuda_Initialize_P_and_Pprev ();
+
+    void cuda_Initialize_F_border_with_zero (double* const f);
     void Compute_r (const double* const delta_p, double* const r) const;
+    void cuda_Compute_r (double* const r, const double* const delta_p) const;
     void Compute_g (double* const g, const double* const r, const double alpha) const;
     void Compute_p (const double tau, const double* const g);
 
-    cudaDeviceProp devProp;
-    pair<dim3, dim3> GridDistribute (const int demandedThreadNum);
-
-    void cuda_Initialize_P_and_Pprev ();
 
     ProcParams procParams;
     ProcComputingCoords procCoords;
     int descent_step_iterations;
     int iterations_counter;
 
-    // p is a double array
-    // p(i=x, j=y) = p [y * row_len + x]
+    static const int cudaStreams_num = 16;
+    cudaStream_t cudaStreams[cudaStreams_num];
     
+    // p is a double array allocated ON DEVICE
+    // p(i=x, j=y) = p [y * row_len + x]
     double* p;
     double* p_prev;
 
