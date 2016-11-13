@@ -108,9 +108,23 @@ struct ProcComputingCoords {
 // 
 // Я храню массивы внутри GPU
 // 
+
 // 
 #define fi(x, y) (x*x + y*y)/((1 + x*y)*(1 + x*y))
 #define F(x, y) logf(1 + x*y)
+// 
+
+// general case
+// #define THREAD_IN_GRID_ID  threadIdx.x + blockIdx.x * blockDim.x + blockDim.x * gridDim.x * (threadIdx.y + blockIdx.y * blockDim.y + blockDim.y * gridDim.y * (threadIdx.z + blockIdx.z * blockDim.z))
+// #define THREAD_IN_BLOCK_ID threadIdx.x + blockDim.x * (threadIdx.y + blockDim.y * threadIdx.z)
+// #define BLOCK_IN_GRID_ID   blockIdx.x + gridDim.x * (blockIdx.y + gridDim.y * blockIdx.z)
+// 
+// special case (my case) (for my `GridDistribute` function)
+#define THREAD_IN_GRID_ID  threadIdx.x + blockIdx.x * blockDim.x
+#define THREAD_IN_BLOCK_ID threadIdx.x
+#define BLOCK_IN_GRID_ID   blockIdx.x
+// 
+#define BLOCK_SIZE blockDim.x * blockDim.y * blockDim.z
 // 
 class DHP_PE_RA_FDM {
 
@@ -132,7 +146,7 @@ class DHP_PE_RA_FDM {
     ProcParams getProcParams () const { return procParams; }
     ProcComputingCoords getProcCoords () const { return procCoords; }
 
-    void Dump_func(const string& fout_name, const double* const f = NULL, const string& func_label = string("")) const;
+    void Dump_func(const string& fout_name, const double* const f = NULL, const string& func_label = string(""));
 
     const double X1;
     const double Y1;
@@ -153,12 +167,15 @@ class DHP_PE_RA_FDM {
 
     MPI_Comm PrepareMPIComm (const ProcParams& procParams_in, const int x_proc_num, const int y_proc_num) const;
 
+    // Buffer on host for copying data from device and further output
+    double* local_f;
+
 
         private:
 
     cudaDeviceProp devProp;
-    pair<dim3, dim3> GridDistribute (const int demandedThreadNum);
-    void cudaAllStreamsSynchronize (const int begin = 0, const int end = (cudaStreams_num -1));
+    pair<dim3, dim3> GridDistribute (const int demandedThreadNum) const;
+    void cudaAllStreamsSynchronize (const int begin = 0, const int end = (cudaStreams_num -1)) const;
 
 
     // This function computes five-point difference equation for Laplace operator approximation for function f and stores result into delta_f
@@ -171,8 +188,8 @@ class DHP_PE_RA_FDM {
     double cuda_ComputingScalarProduct (const double* const f1, const double* const f2);
 
     void cuda_Initialize_P_and_Pprev ();
-
     void cuda_Initialize_F_border_with_zero (double* const f);
+
     void cuda_Compute_r (double* const r, const double* const delta_p) const;
     void cuda_Compute_g (double* const g, const double* const r, const double alpha) const;
     void cuda_Compute_p (const double tau, const double* const g);
@@ -186,7 +203,8 @@ class DHP_PE_RA_FDM {
     static const int cudaStreams_num = 16;
     cudaStream_t cudaStreams[cudaStreams_num];
     
-    double* scalar_product_aggregation_array;
+    double* cuda_sum_aggr_arr1;
+    double* cuda_sum_aggr_arr2;
 
     // p is a double array allocated ON DEVICE
     // p(i=x, j=y) = p [y * row_len + x]

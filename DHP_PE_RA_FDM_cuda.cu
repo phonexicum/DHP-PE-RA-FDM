@@ -7,10 +7,11 @@ using std::make_pair;
 
 #include "DHP_PE_RA_FDM.h"
 
+
 // ==================================================================================================================================================
 //                                                                                                                      DHP_PE_RA_FDM::GridDistribute
 // ==================================================================================================================================================
-pair<dim3, dim3> DHP_PE_RA_FDM::GridDistribute (const int demandedThreadNum){
+pair<dim3, dim3> DHP_PE_RA_FDM::GridDistribute (const int demandedThreadNum) const{
 
     dim3 blockDim = dim3(min(min(demandedThreadNum, devProp.maxThreadsPerBlock), devProp.maxThreadsDim[0]));
 
@@ -23,11 +24,10 @@ pair<dim3, dim3> DHP_PE_RA_FDM::GridDistribute (const int demandedThreadNum){
     return make_pair(gridDim, blockDim);
 }
 
-
 // ==================================================================================================================================================
 //                                                                                                           DHP_PE_RA_FDM::cudaAllStreamsSynchronize
 // ==================================================================================================================================================
-void DHP_PE_RA_FDM::cudaAllStreamsSynchronize(const int begin, const int end){
+void DHP_PE_RA_FDM::cudaAllStreamsSynchronize(const int begin, const int end) const{
     for (int i = max(0, begin); i <= min(cudaStreams_num -1, end); i++)
         cudaStreamSynchronize(cudaStreams[i]);
 }

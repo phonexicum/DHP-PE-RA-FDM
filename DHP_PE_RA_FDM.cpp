@@ -24,7 +24,6 @@ using std::max;
 using std::abs;
 
 using std::swap;
-// using std::memset;
 
 // ==================================================================================================================================================
 //                                                                                                                       DHP_PE_RA_FDM::DHP_PE_RA_FDM
@@ -96,10 +95,14 @@ hy ((y2-y1)/grid_size_y_),
 grid_size_x (grid_size_x_),
 grid_size_y (grid_size_y_),
 eps (eps_),
+
+local_f (NULL),
+
 descent_step_iterations (descent_step_iterations_),
 iterations_counter (0),
 
-scalar_product_aggregation_array (NULL),
+cuda_sum_aggr_arr1 (NULL),
+cuda_sum_aggr_arr2 (NULL),
 
 p (NULL),
 p_prev (NULL),
@@ -170,8 +173,15 @@ debug_fname (string("debug.txt"))
 // ==================================================================================================================================================
 DHP_PE_RA_FDM::~DHP_PE_RA_FDM (){
 
-    if (scalar_product_aggregation_array != NULL){
-        SAFE_CUDA(cudaFree(scalar_product_aggregation_array)); scalar_product_aggregation_array = NULL;
+    if (local_f != NULL){
+        SAFE_CUDA(cudaFreeHost(local_f)); local_f = NULL;
+    }
+
+    if (cuda_sum_aggr_arr1 != NULL){
+        SAFE_CUDA(cudaFree(cuda_sum_aggr_arr1)); cuda_sum_aggr_arr1 = NULL;
+    }
+    if (cuda_sum_aggr_arr2 != NULL){
+        SAFE_CUDA(cudaFree(cuda_sum_aggr_arr2)); cuda_sum_aggr_arr2 = NULL;
     }
 
     if (p != NULL){
@@ -180,6 +190,7 @@ DHP_PE_RA_FDM::~DHP_PE_RA_FDM (){
     if (p_prev != NULL){
         SAFE_CUDA(cudaFree(p_prev)); p_prev = NULL;
     }
+
     if (send_message_lr != NULL){
         SAFE_CUDA(cudaFreeHost(send_message_lr)); send_message_lr = NULL;
     }
@@ -227,7 +238,6 @@ MPI_Comm DHP_PE_RA_FDM::PrepareMPIComm(const ProcParams& procParams_in, const in
     if (procParams_in.size < x_proc_num * y_proc_num)
         throw DHP_PE_RA_FDM_Exception("Not enough processes for requested computations.");
 
-    // cout << procParams_in.size << " " << grid_size_x << " " << grid_size_y << endl ;
     if (procParams_in.size > (grid_size_x+1) * (grid_size_y+1))
         throw DHP_PE_RA_FDM_Exception("Can not scale computation of matrix to demanded amount of processes (amount of points in region < amount of processes).");
 
@@ -278,7 +288,8 @@ void DHP_PE_RA_FDM::Compute (const ProcParams& procParams_in, const int x_proc_n
 
     double scalar_product_delta_g_and_g = 1;
     double scalar_product_delta_r_and_g = 1;
-    double alpha = 0; // equality to zero is important
+    int scalar_product_r_and_g = 1;
+    double alpha = 0;
     double tau = 0;
 
     // Computing step 1
@@ -314,7 +325,7 @@ void DHP_PE_RA_FDM::Compute (const ProcParams& procParams_in, const int x_proc_n
             Dump_func(debug_fname, delta_r, "delta_r");
 
             // Computing step 5
-            scalar_product_delta_r_and_g = ComputingScalarProduct(delta_r, g);
+            scalar_product_delta_r_and_g = cuda_ComputingScalarProduct(delta_r, g);
             if (debug and procParams.rank == 0)
                 cout << "scalar_product_delta_r_and_g= " << scalar_product_delta_r_and_g << endl;
 
@@ -349,7 +360,7 @@ void DHP_PE_RA_FDM::Compute (const ProcParams& procParams_in, const int x_proc_n
         }
 
         // Computing step 10
-        scalar_product_delta_g_and_g = ComputingScalarProduct(delta_g, g);
+        scalar_product_delta_g_and_g = cuda_ComputingScalarProduct(delta_g, g);
         if (debug and procParams.rank == 0)
             cout << "scalar_product_delta_g_and_g= " << scalar_product_delta_g_and_g << endl;
 
@@ -372,14 +383,16 @@ void DHP_PE_RA_FDM::Compute (const ProcParams& procParams_in, const int x_proc_n
             cout << "tau= " << tau << endl;
 
         // Computing step 12
-        Compute_p (tau, g);
+        cuda_Compute_p (tau, g);
         Dump_func(debug_fname, p, "p");
 
-        if (StopCriteria (p, p_prev))
+        if (cuda_StopCriteria (p, p_prev))
             break;
 
         swap(p, p_prev);
         iterations_counter++;
+
+        break;
     }
 
     SAFE_CUDA(cudaFree(g)); g = NULL;
@@ -391,11 +404,17 @@ void DHP_PE_RA_FDM::Compute (const ProcParams& procParams_in, const int x_proc_n
 
 
 // ==================================================================================================================================================
-//                                                                                                                                DHP_PE_RA_FDM::Dump
+//                                                                                                                           DHP_PE_RA_FDM::Dump_func
 // ==================================================================================================================================================
-void DHP_PE_RA_FDM::Dump_func(const string& fout_name, const double* const f, const string& func_label) const{
+void DHP_PE_RA_FDM::Dump_func(const string& fout_name, const double* const f, const string& func_label){
 
     if (debug){
+
+        if (local_f == NULL)
+            SAFE_CUDA(cudaHostAlloc(&local_f, procCoords.x_cells_num * procCoords.y_cells_num * sizeof(*local_f), cudaHostAllocMapped));
+            // SAFE_CUDA(cudaMallocHost(&local_f, procCoords.x_cells_num * procCoords.y_cells_num * sizeof(*local_f)));
+
+        SAFE_CUDA(cudaMemcpy(local_f, f, procCoords.x_cells_num * procCoords.y_cells_num * sizeof(*f), cudaMemcpyDeviceToHost));
 
         if (procParams.rank != 0) {
             MPI_Status status;
@@ -430,7 +449,7 @@ void DHP_PE_RA_FDM::Dump_func(const string& fout_name, const double* const f, co
 
                     // std::numeric_limits<double>::max_digits10 - is a c++11 feature
                     // std::numeric_limits<double>::max_digits10 == 17
-                    fout << std::setprecision(17) << f[j * procCoords.x_cells_num + i] << " ";
+                    fout << std::setprecision(17) << local_f[j * procCoords.x_cells_num + i] << " ";
 
                     fout << endl;
 

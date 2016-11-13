@@ -4,6 +4,7 @@ using std::pair;
 
 #include "DHP_PE_RA_FDM.h"
 
+
 // ==================================================================================================================================================
 //                                                                                                     cudakernel_Initialize_F_boundary_fi_horizontal
 // ==================================================================================================================================================
@@ -11,11 +12,11 @@ __global__ void cudakernel_Initialize_F_boundary_fi_horizontal (double* const f,
     const double X1, const double Y1, const double X2, const double Y2, const double hx, const double hy,
     const int j_shift) {
 
-    int threadLinearIdx = (threadIdx.z * blockDim.y * gridDim.y + threadIdx.y) * blockDim.y * gridDim.y + threadIdx.x;
+    int threadId = THREAD_IN_GRID_ID;
 
-    if (threadLinearIdx < procCoords.x_cells_num)
-        f[j_shift * procCoords.x_cells_num + threadLinearIdx] = fi(
-            X1 + (procCoords.x_cell_pos + threadLinearIdx) * hx,
+    if (threadId < procCoords.x_cells_num)
+        f[j_shift * procCoords.x_cells_num + threadId] = fi(
+            X1 + (procCoords.x_cell_pos + threadId) * hx,
             Y1 + (procCoords.y_cell_pos + j_shift) * hy
         );
 }
@@ -28,12 +29,12 @@ __global__ void cudakernel_Initialize_F_boundary_fi_vertical (double* const f, c
     const double X1, const double Y1, const double X2, const double Y2, const double hx, const double hy,
     const int i_shift) {
 
-    int threadLinearIdx = (threadIdx.z * blockDim.y * gridDim.y + threadIdx.y) * blockDim.y * gridDim.y + threadIdx.x;
+    int threadId = THREAD_IN_GRID_ID;
 
-    if (threadLinearIdx < procCoords.y_cells_num)
-        f[threadLinearIdx * procCoords.x_cells_num + i_shift] = fi(
+    if (threadId < procCoords.y_cells_num)
+        f[threadId * procCoords.x_cells_num + i_shift] = fi(
             X1 + (procCoords.x_cell_pos + i_shift) * hx,
-            Y1 + (procCoords.y_cell_pos + threadLinearIdx) * hy
+            Y1 + (procCoords.y_cell_pos + threadId) * hy
         );
 }
 
@@ -91,10 +92,10 @@ void DHP_PE_RA_FDM::cuda_Initialize_P_and_Pprev (){
 // ==================================================================================================================================================
 __global__ void cudakernel_Initialize_F_with_zero_vertical (double* const f, const int elem_num, const int step){
 
-    int threadLinearIdx = (threadIdx.z * blockDim.y * gridDim.y + threadIdx.y) * blockDim.y * gridDim.y + threadIdx.x;
+    int threadId = THREAD_IN_GRID_ID;
 
-    if (threadLinearIdx < elem_num)
-        f[threadLinearIdx * step] = 0;
+    if (threadId < elem_num)
+        f[threadId * step] = 0;
 }
 
 
@@ -105,13 +106,13 @@ void DHP_PE_RA_FDM::cuda_Initialize_F_border_with_zero (double* const f){
 
     if (procCoords.top){
 
-        SAFE_CUDA(cudaMemset(r + 0 * procCoords.x_cells_num + 0, 0,
-            procCoords.x_cells_num * sizeof(*r)));
+        SAFE_CUDA(cudaMemset(f + 0 * procCoords.x_cells_num + 0, 0,
+            procCoords.x_cells_num * sizeof(*f)));
     }
     if (procCoords.bottom){
 
-        SAFE_CUDA(cudaMemset(r + (procCoords.y_cells_num -1) * procCoords.x_cells_num + 0, 0,
-            procCoords.x_cells_num * sizeof(*r)));
+        SAFE_CUDA(cudaMemset(f + (procCoords.y_cells_num -1) * procCoords.x_cells_num + 0, 0,
+            procCoords.x_cells_num * sizeof(*f)));
     }
     if (procCoords.left){
 

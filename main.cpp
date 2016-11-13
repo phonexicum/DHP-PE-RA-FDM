@@ -43,7 +43,7 @@ class DHP_PE_RA_FDM_superprac : public DHP_PE_RA_FDM {
     DHP_PE_RA_FDM_superprac(const int grid_size_x, const int grid_size_y, const double eps_, const int cudaDevNum):
         DHP_PE_RA_FDM(0, 0, 3, 3, grid_size_x, grid_size_y, eps_, cudaDevNum, 1) {}
 
-    void Print_p (const string& dout_name) const;
+    void Print_p (const string& dout_name);
 
 };
 
@@ -122,7 +122,7 @@ int main (int argc, char** argv){
 // ==================================================================================================================================================
 //                                                                                                                   DHP_PE_RA_FDM_superprac::Print_p
 // ==================================================================================================================================================
-void DHP_PE_RA_FDM_superprac::Print_p (const string& dout_name) const{
+void DHP_PE_RA_FDM_superprac::Print_p (const string& dout_name){
 
     ProcParams procParams = getProcParams();
     ProcComputingCoords procCoords = getProcCoords();
@@ -132,6 +132,11 @@ void DHP_PE_RA_FDM_superprac::Print_p (const string& dout_name) const{
     fstream fout(ss.str().c_str(), fstream::out);
 
     double* p = getSolutionPerProcess();
+
+    if (local_f == NULL)
+        SAFE_CUDA(cudaHostAlloc(&local_f, procCoords.x_cells_num * procCoords.y_cells_num * sizeof(*local_f), cudaHostAllocMapped));
+
+    SAFE_CUDA(cudaMemcpy(local_f, p, procCoords.x_cells_num * procCoords.y_cells_num * sizeof(*p), cudaMemcpyDeviceToHost));
 
     fout << "[" << endl;
     for (int j = 0; j < procCoords.y_cells_num; j++){
@@ -143,7 +148,7 @@ void DHP_PE_RA_FDM_superprac::Print_p (const string& dout_name) const{
             fout << "{"
                 << "\"x\":" << std::setprecision(17) << X1 + (procCoords.x_cell_pos + i) * hx
                 << ",\"y\":" << std::setprecision(17) << Y1 + (procCoords.y_cell_pos + j) * hy
-                << ",\"u\":" << std::setprecision(17) << p[j * procCoords.x_cells_num + i];
+                << ",\"u\":" << std::setprecision(17) << local_f[j * procCoords.x_cells_num + i];
             if (i == procCoords.x_cells_num -1 and j == procCoords.y_cells_num -1)
                 fout << "}" << endl;
             else

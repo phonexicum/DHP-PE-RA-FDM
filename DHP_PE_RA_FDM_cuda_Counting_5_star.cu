@@ -4,15 +4,16 @@ using std::pair;
 
 #include "DHP_PE_RA_FDM.h"
 
+
 // ==================================================================================================================================================
 //                                                                                                                 cudakernel_Counting_5_star_insides
 // ==================================================================================================================================================
 __global__ void cudakernel_Counting_5_star_insides (double* const delta_f, const double* const f, const ProcComputingCoords procCoords,
     const int hx, const int hy){
 
-    int threadLinearIdx = (threadIdx.z * blockDim.y * gridDim.y + threadIdx.y) * blockDim.y * gridDim.y + threadIdx.x;
-    int i = 1+ threadLinearIdx % (procCoords.x_cells_num -2);
-    int j = 1+ threadLinearIdx / (procCoords.x_cells_num -2);
+    int threadId = THREAD_IN_GRID_ID;
+    int i = 1 + threadId % (procCoords.x_cells_num -2);
+    int j = 1 + threadId / (procCoords.x_cells_num -2);
 
     if (j < procCoords.y_cells_num -1)
         delta_f[j * procCoords.x_cells_num + i] = (
@@ -30,10 +31,10 @@ __global__ void cudakernel_Counting_5_star_insides (double* const delta_f, const
 // ==================================================================================================================================================
 __global__ void cudakernel_Counting_5_star_Memcpy_vertical_message (double* const to, const double* const from, const int elem_num, const int step){
 
-    int threadLinearIdx = (threadIdx.z * blockDim.y * gridDim.y + threadIdx.y) * blockDim.y * gridDim.y + threadIdx.x;
+    int threadId = THREAD_IN_GRID_ID;
 
-    if (threadLinearIdx < elem_num)
-        to[threadLinearIdx] = from[threadLinearIdx * step];
+    if (threadId < elem_num)
+        to[threadId] = from[threadId * step];
 }
 
 
@@ -43,10 +44,10 @@ __global__ void cudakernel_Counting_5_star_Memcpy_vertical_message (double* cons
 __global__ void cudakernel_Counting_5_star_LR_delta_f (double* const delta_f, const double* const f, const double* const recv_message_lr,
     const ProcComputingCoords procCoords, const int hx, const int hy){
 
-    int threadLinearIdx = (threadIdx.z * blockDim.y * gridDim.y + threadIdx.y) * blockDim.y * gridDim.y + threadIdx.x;
+    int threadId = THREAD_IN_GRID_ID;
 
     int i = 0;
-    int j = 1 + threadLinearIdx;
+    int j = 1 + threadId;
 
     if (j < procCoords.y_cells_num -1)
         if (not procCoords.left) {
@@ -67,10 +68,10 @@ __global__ void cudakernel_Counting_5_star_LR_delta_f (double* const delta_f, co
 __global__ void cudakernel_Counting_5_star_RL_delta_f (double* const delta_f, const double* const f, const double* const recv_message_rl,
     const ProcComputingCoords procCoords, const int hx, const int hy){
 
-    int threadLinearIdx = (threadIdx.z * blockDim.y * gridDim.y + threadIdx.y) * blockDim.y * gridDim.y + threadIdx.x;
+    int threadId = THREAD_IN_GRID_ID;
 
     int i = procCoords.x_cells_num -1;
-    int j = 1+ threadLinearIdx;
+    int j = 1 + threadId;
 
     if (j < procCoords.y_cells_num -1)
         if (not procCoords.right) {
@@ -91,9 +92,9 @@ __global__ void cudakernel_Counting_5_star_RL_delta_f (double* const delta_f, co
 __global__ void cudakernel_Counting_5_star_TD_delta_f (double* const delta_f, const double* const f, const double* const recv_message_td,
     const ProcComputingCoords procCoords, const int hx, const int hy){
 
-    int threadLinearIdx = (threadIdx.z * blockDim.y * gridDim.y + threadIdx.y) * blockDim.y * gridDim.y + threadIdx.x;
+    int threadId = THREAD_IN_GRID_ID;
 
-    int i = 1 + threadLinearIdx;
+    int i = 1 + threadId;
     int j = 0;
 
     if (i < procCoords.x_cells_num -1)
@@ -115,9 +116,9 @@ __global__ void cudakernel_Counting_5_star_TD_delta_f (double* const delta_f, co
 __global__ void cudakernel_Counting_5_star_BU_delta_f (double* const delta_f, const double* const f, const double* const recv_message_bu,
     const ProcComputingCoords procCoords, const int hx, const int hy){
 
-    int threadLinearIdx = (threadIdx.z * blockDim.y * gridDim.y + threadIdx.y) * blockDim.y * gridDim.y + threadIdx.x;
+    int threadId = THREAD_IN_GRID_ID;
 
-    int i = 1 + threadLinearIdx;
+    int i = 1 + threadId;
     int j = procCoords.y_cells_num -1;
 
     if (i < procCoords.x_cells_num -1)
@@ -140,9 +141,9 @@ __global__ void cudakernel_Counting_5_star_TDBU_delta_f (double* const delta_f, 
     const double* const recv_message_td, const double* const recv_message_bu,
     const ProcComputingCoords procCoords, const int hx, const int hy){
 
-    int threadLinearIdx = (threadIdx.z * blockDim.y * gridDim.y + threadIdx.y) * blockDim.y * gridDim.y + threadIdx.x;
+    int threadId = THREAD_IN_GRID_ID;
 
-    int i = 1 + threadLinearIdx;
+    int i = 1 + threadId;
     int j = 0;
 
     if (i < procCoords.x_cells_num -1)
@@ -165,10 +166,10 @@ __global__ void cudakernel_Counting_5_star_LRRL_delta_f (double* const delta_f, 
     const double* const recv_message_lr, const double* const recv_message_rl,
     const ProcComputingCoords procCoords, const int hx, const int hy){
 
-    int threadLinearIdx = (threadIdx.z * blockDim.y * gridDim.y + threadIdx.y) * blockDim.y * gridDim.y + threadIdx.x;
+    int threadId = THREAD_IN_GRID_ID;
 
     int i = 0;
-    int j = 1+ threadLinearIdx;
+    int j = 1 + threadId;
 
     if (j < procCoords.y_cells_num -1)
         if (not procCoords.left and not procCoords.right) {
@@ -223,10 +224,10 @@ void DHP_PE_RA_FDM::cuda_Counting_5_star (const double* const f, double* const d
     mesh = GridDistribute(procCoords.y_cells_num);
 
     // left -> right
-    cudakernel_Counting_5_star_Memcpy_vertical_message<<<mesh.first, mesh.second, 0 cudaStreams[1]>>> (send_message_lr, f + procCoords.x_cells_num -1,
+    cudakernel_Counting_5_star_Memcpy_vertical_message<<<mesh.first, mesh.second, 0, cudaStreams[1]>>> (send_message_lr, f + procCoords.x_cells_num -1,
         procCoords.y_cells_num, procCoords.x_cells_num);
     // right -> left
-    cudakernel_Counting_5_star_Memcpy_vertical_message<<<mesh.first, mesh.second, 0 cudaStreams[2]>>> (send_message_rl, f,
+    cudakernel_Counting_5_star_Memcpy_vertical_message<<<mesh.first, mesh.second, 0, cudaStreams[2]>>> (send_message_rl, f,
         procCoords.y_cells_num, procCoords.x_cells_num);
     // top -> down
     SAFE_CUDA(cudaMemcpyAsync(send_message_td, f + (procCoords.y_cells_num -1) * procCoords.x_cells_num, procCoords.x_cells_num * sizeof(*f),

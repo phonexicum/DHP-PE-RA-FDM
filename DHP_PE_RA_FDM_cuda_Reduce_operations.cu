@@ -1,75 +1,67 @@
 #include <utility>
 
 using std::pair;
+using std::swap;
 
 #include "DHP_PE_RA_FDM.h"
 
 
 // ==================================================================================================================================================
-//                                                                                                                               cudakernel_Compute_r
+//                                                                                                                    cudakernel_PrepareScalarProduct
 // ==================================================================================================================================================
-__global__ void cudakernel_Compute_r (double* const r, const double* const delta_p, const ProcComputingCoords procCoords,
-    const int X1, const int Y1, const int hx, const int hy){
+__global__ void cudakernel_PrepareScalarProduct (double* const cuda_sum_aggr_arr, const double* const f1, const double* const f2,
+    const int arr_size, const int hx, const int hy){
 
-    int threadLinearIdx = (threadIdx.z * blockDim.y * gridDim.y + threadIdx.y) * blockDim.y * gridDim.y + threadIdx.x;
+    int threadId = THREAD_IN_GRID_ID;
 
-    int i = threadLinearIdx % (procCoords.x_cells_num - static_cast<int>(procCoords.right) - static_cast<int>(procCoords.left));
-    int j = threadLinearIdx / (procCoords.x_cells_num - static_cast<int>(procCoords.right) - static_cast<int>(procCoords.left));
-
-    r[j * procCoords.x_cells_num + i] =
-        delta_p[j * procCoords.x_cells_num + i] -
-        F(X1 + (procCoords.x_cell_pos + i) * hx, Y1 + (procCoords.y_cell_pos + j) * hy)
-    ;
+    if (threadId < arr_size)
+        cuda_sum_aggr_arr[threadId] = f1[threadId] * f2[threadId] * hx * hy;
 }
 
 
 // ==================================================================================================================================================
-//                                                                                                                           DHP_PE_RA_FDM::Compute_r
+//                                                                                                                              cudakernel_ComputeSum
 // ==================================================================================================================================================
-void DHP_PE_RA_FDM::cuda_Compute_r (double* const r, const double* const delta_p) const{
+// 
+// This cuda kernel summarize `blockSize` values from function f corresponding for current block and stores the result into
+//      `cuda_sum_aggr_arr[blockLinearId]`
+// 
+__global__ void cudakernel_ComputeSum (double* const cuda_sum_aggr_arr, const double* const f, const int arr_size){
 
-    // internal region
-    pair<dim3, dim3> mesh = GridDistribute(
-        (procCoords.y_cells_num - static_cast<int>(procCoords.bottom) - static_cast<int>(procCoords.top)) *
-        (procCoords.x_cells_num - static_cast<int>(procCoords.right) - static_cast<int>(procCoords.left))
-    );
-    cudakernel_Compute_r<<<mesh.first, mesh.second, 0, cudaStreams[0]>>> (r, delta_p, procCoords, X1, Y1, hx, hy);
+    const int blockSize = BLOCK_SIZE;
+    int thisBlockSize;
+    
+    extern __shared__ double data []; // shared memory in amount of 1024 doubles (1024=maxThreadsPerBlock)
 
-    cudaAllStreamsSynchronize(0, 0);
-}
+    int threadLinearBlockId = THREAD_IN_BLOCK_ID;
+    int blockLinearId = BLOCK_IN_GRID_ID;
 
+    // Cut off redundant blocks
+    if (blockLinearId < (arr_size -1) / blockSize +1){
 
-// ==================================================================================================================================================
-//                                                                                                                    cudakernel_ComputeScalarProduct
-// ==================================================================================================================================================
-__global__ void cudakernel_ComputeScalarProduct (const double* const f, double* const scalar_product_aggregation_array, const int step){
+        bool lastBlock = blockLinearId == blockSize -1;
+        if (lastBlock)
+            thisBlockSize = arr_size % blockSize;
+        else
+            thisBlockSize = blockSize;
 
-    __shared__ int data [blockDim.x * blockDim.y * blockDim.z];
+        if (not lastBlock or (lastBlock and (threadLinearBlockId < thisBlockSize)) ){
 
-    // int threadLinearGridIdx = ((threadIdx.z + blockIdx.z * blockDim.z) * blockDim.y * gridDim.y + threadIdx.y + blockIdx.y * blockDim.y) * blockDim.x * gridDim.x + threadIdx.x + blockIdx.x * blockDim.x;
+            data[threadLinearBlockId] = f[threadLinearBlockId + blockLinearId * blockSize];
+            __syncthreads ();
 
-    int threadLinearBlockIdx = threadIdx.x + blockDim.x * (threadIdx.y + threadIdx.z * blockDim.y);
-    int blockLinearIdx = blockIdx.x + gridDim.x * (blockIdx.y + blockIdx.z * gridDim.y);
-    // int threadLinearGridIdx = threadLinearBlockIdx + blockLinearIdx * blockDim.x * blockDim.y * blockDim.z;
+            for (int s = 1; s < thisBlockSize; s *= 2){
+                if (threadLinearBlockId % (2*s) == 0 and threadLinearBlockId + s < thisBlockSize){
+                    data[threadLinearBlockId] += data[threadLinearBlockId + s];
+                }
+                __syncthreads ();
+            }
 
-
-    int tid = threadIdx.x;
-    int i = blockIdx.x * blockDim.x + threadIdx.x data [tid] = inData [i];
-
-    __syncthreads ();
-    for (int s = 1; s < blockDim.x; s *= 2){
-        if (tid % (2*s) == 0){
-            data [tid] += data [tid + s];
+            if (threadLinearBlockId == 0)
+                cuda_sum_aggr_arr[blockLinearId] = data[0];
         }
-        __syncthreads ();
-    }
-
-    if (tid == 0){
-        outData [blockIdx.x] = data [0];
     }
 }
-
-
 
 
 // ==================================================================================================================================================
@@ -77,17 +69,28 @@ __global__ void cudakernel_ComputeScalarProduct (const double* const f, double* 
 // ==================================================================================================================================================
 double DHP_PE_RA_FDM::cuda_ComputingScalarProduct(const double* const f1, const double* const f2){
 
-    if (scalar_product_aggregation_array == NULL)
-        SAFE_CUDA(cudaMalloc(&scalar_product_aggregation_array,
-            procCoords.x_cells_num * procCoords.y_cells_num * sizeof(*scalar_product_aggregation_array)));
+    if (cuda_sum_aggr_arr1 == NULL)
+        SAFE_CUDA(cudaMalloc(&cuda_sum_aggr_arr1, procCoords.x_cells_num * procCoords.y_cells_num * sizeof(*cuda_sum_aggr_arr1)));
+    if (cuda_sum_aggr_arr2 == NULL)
+        SAFE_CUDA(cudaMalloc(&cuda_sum_aggr_arr2, procCoords.x_cells_num * procCoords.y_cells_num * sizeof(*cuda_sum_aggr_arr2)));
 
+
+    int dimension = procCoords.x_cells_num * procCoords.y_cells_num;
+    pair<dim3, dim3> mesh = GridDistribute(dimension);
+    cudakernel_PrepareScalarProduct<<<mesh.first, mesh.second>>> (cuda_sum_aggr_arr1, f1, f2, dimension, hx, hy);
+
+    while (true){
+        cudakernel_ComputeSum<<<mesh.first, mesh.second, devProp.maxThreadsPerBlock * sizeof(*cuda_sum_aggr_arr1)>>> (cuda_sum_aggr_arr2, cuda_sum_aggr_arr1, dimension);
+
+        if (dimension == 1) break;
+        
+        dimension = mesh.second.x * mesh.second.y * mesh.second.z; // number of blocks
+        mesh = GridDistribute(dimension);
+        swap(cuda_sum_aggr_arr1, cuda_sum_aggr_arr2);
+    }
 
     double scalar_product = 0;
-    for (int j = 0; j < procCoords.y_cells_num; j++){
-        for (int i = 0; i < procCoords.x_cells_num; i++){
-            scalar_product += hx * hy * f1[j * procCoords.x_cells_num + i] * f2[j * procCoords.x_cells_num + i];
-        }
-    }
+    SAFE_CUDA(cudaMemcpy(&scalar_product, cuda_sum_aggr_arr2, sizeof(double), cudaMemcpyDeviceToHost));
 
     double global_scalar_product = 0;
 
@@ -106,14 +109,90 @@ double DHP_PE_RA_FDM::cuda_ComputingScalarProduct(const double* const f1, const 
 
 
 // ==================================================================================================================================================
+//                                                                                                                     cudakernel_PrepareStopCriteria
+// ==================================================================================================================================================
+__global__ void cudakernel_PrepareStopCriteria (double* const cuda_sum_aggr_arr, const double* const f1, const double* const f2,
+    const int arr_size){
+
+    int threadId = THREAD_IN_GRID_ID;
+
+    if (threadId < arr_size)
+        cuda_sum_aggr_arr[threadId] = fabs(f1[threadId] - f2[threadId]);
+}
+
+
+// ==================================================================================================================================================
+//                                                                                                                              cudakernel_ComputeMax
+// ==================================================================================================================================================
+// 
+// This cuda kernel found maximum in `blockSize` values from function f corresponding for current block and stores the result into
+//      `cuda_sum_aggr_arr[blockLinearId]`
+// 
+__global__ void cudakernel_ComputeMax (double* const cuda_sum_aggr_arr, const double* const f, const int arr_size){
+
+    const int blockSize = BLOCK_SIZE;
+    int thisBlockSize;
+    
+    extern __shared__ double data []; // shared memory in amount of 1024 doubles (1024=maxThreadsPerBlock)
+
+    int threadLinearBlockId = THREAD_IN_BLOCK_ID;
+    int blockLinearId = BLOCK_IN_GRID_ID;
+
+    // Cut off redundant blocks
+    if (blockLinearId < (arr_size -1) / blockSize +1) {
+
+        bool lastBlock = blockLinearId == blockSize -1;
+        if (lastBlock)
+            thisBlockSize = arr_size % blockSize;
+        else
+            thisBlockSize = blockSize;
+
+        if (not lastBlock or (lastBlock and (threadLinearBlockId < thisBlockSize)) ){
+
+            data[threadLinearBlockId] = f[threadLinearBlockId + blockLinearId * blockSize];
+            __syncthreads ();
+
+            for (int s = 1; s < thisBlockSize; s *= 2){
+                if (threadLinearBlockId % (2*s) == 0 and threadLinearBlockId + s < thisBlockSize){
+                    data[threadLinearBlockId] = max(data[threadLinearBlockId], data[threadLinearBlockId + s]);
+                }
+                __syncthreads ();
+            }
+
+            if (threadLinearBlockId == 0)
+                cuda_sum_aggr_arr[blockLinearId] = data[0];
+        }
+    }
+}
+
+
+// ==================================================================================================================================================
 //                                                                                                                   DHP_PE_RA_FDM::cuda_StopCriteria
 // ==================================================================================================================================================
 bool DHP_PE_RA_FDM::cuda_StopCriteria(const double* const f1, const double* const f2){
 
-    double norm = 0;
-    for (int i = 0; i < procCoords.x_cells_num * procCoords.y_cells_num; i++){
-        norm = max(norm, abs(f1[i] - f2[i]));
+    if (cuda_sum_aggr_arr1 == NULL)
+        SAFE_CUDA(cudaMalloc(&cuda_sum_aggr_arr1, procCoords.x_cells_num * procCoords.y_cells_num * sizeof(*cuda_sum_aggr_arr1)));
+    if (cuda_sum_aggr_arr2 == NULL)
+        SAFE_CUDA(cudaMalloc(&cuda_sum_aggr_arr2, procCoords.x_cells_num * procCoords.y_cells_num * sizeof(*cuda_sum_aggr_arr2)));
+
+
+    int dimension = procCoords.x_cells_num * procCoords.y_cells_num;
+    pair<dim3, dim3> mesh = GridDistribute(dimension);
+    cudakernel_PrepareStopCriteria<<<mesh.first, mesh.second>>> (cuda_sum_aggr_arr1, f1, f2, dimension);
+
+    while (true){
+        cudakernel_ComputeMax<<<mesh.first, mesh.second, devProp.maxThreadsPerBlock * sizeof(*cuda_sum_aggr_arr1)>>> (cuda_sum_aggr_arr2, cuda_sum_aggr_arr1, dimension);
+
+        if (dimension == 1) break;
+        
+        dimension = mesh.second.x * mesh.second.y * mesh.second.z; // number of blocks
+        mesh = GridDistribute(dimension);
+        swap(cuda_sum_aggr_arr1, cuda_sum_aggr_arr2);
     }
+
+    double norm = 0;
+    SAFE_CUDA(cudaMemcpy(&norm, cuda_sum_aggr_arr2, sizeof(double), cudaMemcpyDeviceToHost));
 
     double global_norm = 0;
 

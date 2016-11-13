@@ -90,7 +90,7 @@ deviceOverlap= 1        // Device can concurrently copy memory and execute a ker
 Lomonosov execute tasks in context of `~/_scratch` directory.
 
 ```
-sbatch -p gputest -n 1 --ntasks-per-node=2 --time=0-00:15:00 impi ./superPrac2 10 0.001 output
+sbatch -p gputest -n 1 --ntasks-per-node=2 --time=0-00:15:00 impi ./superPrac2 5 0.001 output
 
 
 sbatch -p test -n 1 --time=0-00:07:00 impi ./superPrac2 1000 0.0001 output/lom-out-1-1000 # 5:20 sec
