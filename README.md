@@ -91,6 +91,10 @@ Lomonosov execute tasks in context of `~/_scratch` directory.
 
 ```
 sbatch -p gputest -n 1 --ntasks-per-node=2 --time=0-00:15:00 impi ./superPrac2 5 0.001 output
+sbatch -p gputest -n 4 --ntasks-per-node=2 --time=0-00:15:00 impi ./superPrac2 20 0.001 output
+sbatch -p gputest -n 4 --ntasks-per-node=2 --time=0-00:15:00 impi ./superPrac2 1000 0.0001 output # 2:40 sec
+
+
 
 
 sbatch -p test -n 1 --time=0-00:07:00 impi ./superPrac2 1000 0.0001 output/lom-out-1-1000 # 5:20 sec
@@ -106,4 +110,34 @@ sbatch -p test -n 64 --time=0-00:00:30 impi ./superPrac2 1000 0.0001 output/lom-
 sbatch -p test -n 64 --time=0-00:02:00 impi ./superPrac2 2000 0.0001 output/lom-out-64-2000 # 40 sec
 sbatch -p test -n 128 --time=0-00:00:30 impi ./superPrac2 1000 0.0001 output/lom-out-128-1000 # 3 sec
 sbatch -p test -n 128 --time=0-00:01:00 impi ./superPrac2 2000 0.0001 output/lom-out-128-2000 # 20 sec
+
+
+
+
+
+
+sbatch -p gputest -n 1 --ntasks-per-node=2 --time=0-00:15:00 impi ./superPrac2 1000 0.0001 output/lom-out-1-1000 # 5:20 sec
+sbatch -p gputest -n 1 --ntasks-per-node=2 --time=0-00:15:00 impi ./superPrac2 2000 0.0001 output/lom-out-1-2000 # 42:00 sec
+
+sbatch -p gputest -n 8 --ntasks-per-node=2 --time=0-00:15:00 impi ./superPrac2 1000 0.0001 output/lom-out-8-1000 # 39 sec
+sbatch -p gputest -n 8 --ntasks-per-node=2 --time=0-00:15:00 impi ./superPrac2 2000 0.0001 output/lom-out-8-2000 # 5:15 sec
+sbatch -p gputest -n 16 --ntasks-per-node=2 --time=0-00:15:00 impi ./superPrac2 1000 0.0001 output/lom-out-16-1000 # 19 sec
+sbatch -p gputest -n 16 --ntasks-per-node=2 --time=0-00:15:00 impi ./superPrac2 2000 0.0001 output/lom-out-16-2000 # 2:40 sec
+
+
+
+Requested node configuration is not available:
+
+sbatch -p gpu -n 32 --ntasks-per-node=2 --time=0-00:15:00 impi ./superPrac2 1000 0.0001 output/lom-out-32-1000 # 10 sec
+sbatch -p gpu -n 32 --ntasks-per-node=2 --time=0-00:15:00 impi ./superPrac2 2000 0.0001 output/lom-out-32-2000 # 1:20 sec
+
+sbatch -p gpu -n 64 --ntasks-per-node=2 --time=0-01:00:00 impi ./superPrac2 1000 0.0001 output/lom-out-64-1000 # 5 sec
+sbatch -p gpu -n 64 --ntasks-per-node=2 --time=0-01:00:00 impi ./superPrac2 2000 0.0001 output/lom-out-64-2000 # 40 sec
+sbatch -p gpu -n 128 --ntasks-per-node=2 --time=0-01:00:00 impi ./superPrac2 1000 0.0001 output/lom-out-128-1000 # 3 sec
+sbatch -p gpu -n 128 --ntasks-per-node=2 --time=0-01:00:00 impi ./superPrac2 2000 0.0001 output/lom-out-128-2000 # 20 sec
+
+
+
+
+
 ```

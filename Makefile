@@ -6,7 +6,7 @@ CUSOURCES=$(wildcard *.cu)
 # module add impi/5.0.1
 # module add cuda/5.5
 lcompile:
-	nvcc -ccbin mpicxx $(SOURCES) $(CUSOURCES) -o superPrac2 -Xcompiler -Wall
+	nvcc -rdc=true -arch=sm_20 -ccbin mpicxx $(SOURCES) $(CUSOURCES) -o superPrac2 -Xcompiler -Wall
 	cp ./superPrac2 ~/_scratch/superPrac2
 
 
@@ -51,17 +51,17 @@ upload: $(MINCLUDES) $(MSOURCES) $(MCUSOURCES) mount/Makefile
 
 
 lprepare:
-	mkdir -p ./_scratch/output/lom-out-1-1000
-	mkdir -p ./_scratch/output/lom-out-1-2000
+	mkdir -p ~/_scratch/output/lom-out-1-1000
+	mkdir -p ~/_scratch/output/lom-out-1-2000
 
-	mkdir -p ./_scratch/output/lom-out-8-1000
-	mkdir -p ./_scratch/output/lom-out-16-1000
-	mkdir -p ./_scratch/output/lom-out-32-1000
-	mkdir -p ./_scratch/output/lom-out-64-1000
-	mkdir -p ./_scratch/output/lom-out-128-1000
+	mkdir -p ~/_scratch/output/lom-out-8-1000
+	mkdir -p ~/_scratch/output/lom-out-16-1000
+	mkdir -p ~/_scratch/output/lom-out-32-1000
+	mkdir -p ~/_scratch/output/lom-out-64-1000
+	mkdir -p ~/_scratch/output/lom-out-128-1000
 
-	mkdir -p ./_scratch/output/lom-out-8-2000
-	mkdir -p ./_scratch/output/lom-out-16-2000
-	mkdir -p ./_scratch/output/lom-out-32-2000
-	mkdir -p ./_scratch/output/lom-out-64-2000
-	mkdir -p ./_scratch/output/lom-out-128-2000
+	mkdir -p ~/_scratch/output/lom-out-8-2000
+	mkdir -p ~/_scratch/output/lom-out-16-2000
+	mkdir -p ~/_scratch/output/lom-out-32-2000
+	mkdir -p ~/_scratch/output/lom-out-64-2000
+	mkdir -p ~/_scratch/output/lom-out-128-2000

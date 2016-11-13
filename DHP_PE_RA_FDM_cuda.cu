@@ -1,11 +1,5 @@
-#include <algorithm>
-#include <utility>
-
-using std::min;
-using std::pair;
-using std::make_pair;
-
 #include "DHP_PE_RA_FDM.h"
+#include "cuda_utils.h"
 
 
 // ==================================================================================================================================================
@@ -23,6 +17,7 @@ pair<dim3, dim3> DHP_PE_RA_FDM::GridDistribute (const int demandedThreadNum) con
     
     return make_pair(gridDim, blockDim);
 }
+
 
 // ==================================================================================================================================================
 //                                                                                                           DHP_PE_RA_FDM::cudaAllStreamsSynchronize

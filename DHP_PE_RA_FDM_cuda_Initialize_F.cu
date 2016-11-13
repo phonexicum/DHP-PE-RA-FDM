@@ -1,8 +1,5 @@
-#include <utility>
-
-using std::pair;
-
 #include "DHP_PE_RA_FDM.h"
+#include "cuda_utils.h"
 
 
 // ==================================================================================================================================================
@@ -78,9 +75,15 @@ void DHP_PE_RA_FDM::cuda_Initialize_P_and_Pprev (){
 
     // internal region
     for (int j = static_cast<int>(procCoords.top); j < procCoords.y_cells_num - static_cast<int>(procCoords.bottom); j++){
-        SAFE_CUDA(cudaMemsetAsync(p_prev + j * procCoords.x_cells_num + static_cast<int>(procCoords.left), 0,
-            (procCoords.x_cells_num - static_cast<int>(procCoords.right) - static_cast<int>(procCoords.left)) * sizeof(*p_prev),
-            cudaStreams[8 + j % 5]));
+
+        int dimension = procCoords.x_cells_num - static_cast<int>(procCoords.right) - static_cast<int>(procCoords.left);
+        mesh = GridDistribute(dimension);
+        cudakernel_MemsetDouble<<<mesh.first, mesh.second, 0, cudaStreams[8 + j % 5]>>>
+            (p_prev + j * procCoords.x_cells_num + static_cast<int>(procCoords.left), 0, dimension);
+
+        // SAFE_CUDA(cudaMemsetAsync(p_prev + j * procCoords.x_cells_num + static_cast<int>(procCoords.left), 1,
+        //     (procCoords.x_cells_num - static_cast<int>(procCoords.right) - static_cast<int>(procCoords.left)) * sizeof(*p_prev),
+        //     cudaStreams[8 + j % 5]));
     }
 
     cudaAllStreamsSynchronize(0, 13);
@@ -106,24 +109,31 @@ void DHP_PE_RA_FDM::cuda_Initialize_F_border_with_zero (double* const f){
 
     if (procCoords.top){
 
-        SAFE_CUDA(cudaMemset(f + 0 * procCoords.x_cells_num + 0, 0,
-            procCoords.x_cells_num * sizeof(*f)));
+        int dimension = procCoords.x_cells_num;
+        pair<dim3, dim3> mesh = GridDistribute(dimension);
+        cudakernel_MemsetDouble<<<mesh.first, mesh.second, 0, cudaStreams[0]>>> (f + 0 * procCoords.x_cells_num + 0, 0, dimension);
+
+        // SAFE_CUDA(cudaMemset(f + 0 * procCoords.x_cells_num + 0, 0, procCoords.x_cells_num * sizeof(*f)));
     }
     if (procCoords.bottom){
 
-        SAFE_CUDA(cudaMemset(f + (procCoords.y_cells_num -1) * procCoords.x_cells_num + 0, 0,
-            procCoords.x_cells_num * sizeof(*f)));
+        int dimension = procCoords.x_cells_num;
+        pair<dim3, dim3> mesh = GridDistribute(dimension);
+        cudakernel_MemsetDouble<<<mesh.first, mesh.second, 0, cudaStreams[1]>>> (
+            f + (procCoords.y_cells_num -1) * procCoords.x_cells_num + 0, 0, dimension);
+
+        // SAFE_CUDA(cudaMemset(f + (procCoords.y_cells_num -1) * procCoords.x_cells_num + 0, 0, procCoords.x_cells_num * sizeof(*f)));
     }
     if (procCoords.left){
 
         pair<dim3, dim3> mesh = GridDistribute(procCoords.y_cells_num);
-        cudakernel_Initialize_F_with_zero_vertical<<<mesh.first, mesh.second, 0, cudaStreams[0]>>> (f, procCoords.y_cells_num, procCoords.x_cells_num);
+        cudakernel_Initialize_F_with_zero_vertical<<<mesh.first, mesh.second, 0, cudaStreams[2]>>> (f, procCoords.y_cells_num, procCoords.x_cells_num);
     }
     if (procCoords.right){
 
         pair<dim3, dim3> mesh = GridDistribute(procCoords.y_cells_num);
-        cudakernel_Initialize_F_with_zero_vertical<<<mesh.first, mesh.second, 0, cudaStreams[1]>>> (f + procCoords.x_cells_num -1, procCoords.y_cells_num, procCoords.x_cells_num);
+        cudakernel_Initialize_F_with_zero_vertical<<<mesh.first, mesh.second, 0, cudaStreams[3]>>> (f + procCoords.x_cells_num -1, procCoords.y_cells_num, procCoords.x_cells_num);
     }
 
-    cudaAllStreamsSynchronize(0, 1);
+    cudaAllStreamsSynchronize(0, 3);
 }

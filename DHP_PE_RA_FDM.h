@@ -92,12 +92,14 @@ struct ProcComputingCoords {
 //      method uses:
 //          five-point difference equation for Laplace operator approximation
 //          grid fragmentation are regular
-//          MPI technology for counting under supercomputers
 //          scalar product: (a, b) = \sum_{i=1}^{i=n-1} ( \sum_{j=1}^{j=m-1} ( h'i * h'j * a(i, j) * b(i, j) ))
+//          MPI technology for computations under supercomputers
+//          CUDA technology for computations under NVIDIA cards.
+//          Computational matrixes are stored at videocard memory, and copied to host only if necessary for any calculation (MPI recv/send)
 // 
 //      boundary conditions: function 'fi'
 //      right side of Laplace operator: function 'F'
-//      stopping criteria: function 'StopCriteria'
+//      stopping criteria: function 'cuda_StopCriteria'
 //
 // Both: boundary conditions and right side of Laplace operator, must be defined in successor class.
 // 
@@ -105,27 +107,6 @@ struct ProcComputingCoords {
 //  exceptions relative to algorithmical problems (not MPI errors) will be thrown by each process)
 // 
 // Dirichlet-Problem-Poisson's-Equation-Rectangular-Area-Finite-Difference-Method
-// 
-// Я храню массивы внутри GPU
-// 
-
-// 
-#define fi(x, y) (x*x + y*y)/((1 + x*y)*(1 + x*y))
-#define F(x, y) logf(1 + x*y)
-// 
-
-// general case
-// #define THREAD_IN_GRID_ID  threadIdx.x + blockIdx.x * blockDim.x + blockDim.x * gridDim.x * (threadIdx.y + blockIdx.y * blockDim.y + blockDim.y * gridDim.y * (threadIdx.z + blockIdx.z * blockDim.z))
-// #define THREAD_IN_BLOCK_ID threadIdx.x + blockDim.x * (threadIdx.y + blockDim.y * threadIdx.z)
-// #define BLOCK_IN_GRID_ID   blockIdx.x + gridDim.x * (blockIdx.y + gridDim.y * blockIdx.z)
-// 
-// special case (my case) (for my `GridDistribute` function)
-#define THREAD_IN_GRID_ID  threadIdx.x + blockIdx.x * blockDim.x
-#define THREAD_IN_BLOCK_ID threadIdx.x
-#define BLOCK_IN_GRID_ID   blockIdx.x
-// 
-#define BLOCK_SIZE blockDim.x * blockDim.y * blockDim.z
-// 
 class DHP_PE_RA_FDM {
 
         public:
@@ -179,7 +160,7 @@ class DHP_PE_RA_FDM {
 
 
     // This function computes five-point difference equation for Laplace operator approximation for function f and stores result into delta_f
-    void cuda_Counting_5_star (const double* const f, double* const delta_f);
+    void cuda_Counting_5_star (double* const delta_f, const double* const f);
 
     // This function computes scalar product of two functions. Scalar product ignores function values on the boundaries
     // 
@@ -232,6 +213,6 @@ class DHP_PE_RA_FDM {
         DumpSync
     };
 
-    static const bool debug = true;
+    static const bool debug = false;
     string debug_fname;
 };
