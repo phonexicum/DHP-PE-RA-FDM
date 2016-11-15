@@ -5,10 +5,9 @@ CUSOURCES=$(wildcard *.cu)
 # module add slurm
 # module add impi/5.0.1
 # module add cuda/5.5
-lcompile:
+lcompile: $(INCLUDES) $(SOURCES) $(CUSOURCES)
 	nvcc -rdc=true -arch=sm_20 -ccbin mpicxx $(SOURCES) $(CUSOURCES) -o superPrac2 -Xcompiler -Wall
 	cp ./superPrac2 ~/_scratch/superPrac2
-
 
 
 .PHONY: clean graph lmount upload

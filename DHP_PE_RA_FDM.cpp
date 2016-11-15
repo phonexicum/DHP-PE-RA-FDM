@@ -98,6 +98,10 @@ eps (eps_),
 
 local_f (NULL),
 
+hxhy (hx*hy),
+hx2 (hx*hx),
+hy2 (hy*hy),
+
 descent_step_iterations (descent_step_iterations_),
 iterations_counter (0),
 
@@ -311,7 +315,6 @@ void DHP_PE_RA_FDM::Compute (const ProcParams& procParams_in, const int x_proc_n
             cout << endl << "iterations_counter = " << iterations_counter << endl;
 
         // Computing step 2
-        // Counting_5_star (p_prev, delta_p);
         cuda_Counting_5_star(delta_p, p_prev);
         Dump_func(debug_fname, delta_p, "delta_p");
 
@@ -321,18 +324,17 @@ void DHP_PE_RA_FDM::Compute (const ProcParams& procParams_in, const int x_proc_n
 
         if (iterations_counter >= descent_step_iterations){
             // Computing step 4
-            // Counting_5_star (r, delta_r);
             cuda_Counting_5_star(delta_r, r);
             Dump_func(debug_fname, delta_r, "delta_r");
 
             // Computing step 5
             scalar_product_delta_r_and_g = cuda_ComputingScalarProduct(delta_r, g);
-            // if (debug and procParams.rank == 0)
+            if (debug and procParams.rank == 0)
                 cout << "scalar_product_delta_r_and_g= " << scalar_product_delta_r_and_g << endl;
 
             // Computing step 6
             alpha = scalar_product_delta_r_and_g / scalar_product_delta_g_and_g;
-            // if (debug and procParams.rank == 0)
+            if (debug and procParams.rank == 0)
                 cout << "alpha= " << alpha << endl;
         }
 
@@ -345,24 +347,23 @@ void DHP_PE_RA_FDM::Compute (const ProcParams& procParams_in, const int x_proc_n
         }
 
         // Computing step 8
-        // Counting_5_star (g, delta_g);
         cuda_Counting_5_star(delta_g, g);
         Dump_func(debug_fname, delta_g, "delta_g");
 
         // Computing step 9
         if (iterations_counter >= descent_step_iterations){
             scalar_product_r_and_g = cuda_ComputingScalarProduct(r, g);
-            // if (debug and procParams.rank == 0)
+            if (debug and procParams.rank == 0)
                 cout << "scalar_product_r_and_g= " << scalar_product_r_and_g << endl;
         } else {
             scalar_product_r_and_g = cuda_ComputingScalarProduct(g, g); // because g is r now!
-            // if (debug and procParams.rank == 0)
+            if (debug and procParams.rank == 0)
                 cout << "scalar_product_r_and_r= " << scalar_product_r_and_g << endl;
         }
 
         // Computing step 10
         scalar_product_delta_g_and_g = cuda_ComputingScalarProduct(delta_g, g);
-        // if (debug and procParams.rank == 0)
+        if (debug and procParams.rank == 0)
             cout << "scalar_product_delta_g_and_g= " << scalar_product_delta_g_and_g << endl;
 
         // Computing step 11
@@ -380,7 +381,7 @@ void DHP_PE_RA_FDM::Compute (const ProcParams& procParams_in, const int x_proc_n
             swap(p, p_prev);
             break;
         }
-        // if (debug and procParams.rank == 0)
+        if (debug and procParams.rank == 0)
             cout << "tau= " << tau << endl;
 
         // Computing step 12
@@ -405,9 +406,9 @@ void DHP_PE_RA_FDM::Compute (const ProcParams& procParams_in, const int x_proc_n
 // ==================================================================================================================================================
 //                                                                                                                           DHP_PE_RA_FDM::Dump_func
 // ==================================================================================================================================================
-void DHP_PE_RA_FDM::Dump_func(const string& fout_name, const double* const f, const string& func_label){
+void DHP_PE_RA_FDM::Dump_func(const string& fout_name, const double* const f, const string& func_label, const bool uncondutional){
 
-    if (debug){
+    if (debug or uncondutional){
 
         if (local_f == NULL)
             SAFE_CUDA(cudaHostAlloc(&local_f, procCoords.x_cells_num * procCoords.y_cells_num * sizeof(*local_f), cudaHostAllocMapped));

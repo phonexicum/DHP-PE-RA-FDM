@@ -19,6 +19,12 @@ using std::pair;
         throw DHP_PE_RA_FDM_Exception(sstr.str().c_str()); \
     }
 
+#define CUDA_CHECK_LAST_ERROR\
+    if (cudaPeekAtLastError() != cudaSuccess){ \
+        stringstream sstr; sstr << __FILE__ << ":" << __LINE__ << " cuda-last-error= " << cudaGetErrorString(cudaGetLastError()); \
+        throw DHP_PE_RA_FDM_Exception(sstr.str().c_str()); \
+    }
+
 // ==================================================================================================================================================
 //                                                                                                                            DHP_PE_RA_FDM_Exception
 // ==================================================================================================================================================
@@ -127,7 +133,7 @@ class DHP_PE_RA_FDM {
     ProcParams getProcParams () const { return procParams; }
     ProcComputingCoords getProcCoords () const { return procCoords; }
 
-    void Dump_func(const string& fout_name, const double* const f = NULL, const string& func_label = string(""));
+    void Dump_func(const string& fout_name, const double* const f = NULL, const string& func_label = string(""), const bool uncondutional = false);
 
     const double X1;
     const double Y1;
@@ -154,8 +160,12 @@ class DHP_PE_RA_FDM {
 
         private:
 
+    // precomputations for speedup
+    double hxhy; // hx * hy
+    double hx2; // hx * hx
+    double hy2; // hy * hy
+
     cudaDeviceProp devProp;
-    pair<dim3, dim3> GridDistribute (const int demandedThreadNum) const;
     void cudaAllStreamsSynchronize (const int begin = 0, const int end = (cudaStreams_num -1)) const;
 
 

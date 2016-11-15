@@ -65,7 +65,9 @@ videocard-name= Tesla X2070
 cudaVersion= 2.0
 
 multiProcessorCount= 14
+maxThreadsPerMultiProcessor= 1536
 warpSize= 32
+
 maxThreadsPerBlock= 1024
 maxGridSize= 65535 65535 65535
 maxThreadsDim= 1024 1024 64
@@ -81,6 +83,27 @@ computeMode= 0          // Multiple threads can use cudaSetDevice() with this de
 asyncEngineCount= 2     // 1 - device can copy and execute kernel in parallel, 2 - can copy in both directions and execute kernel
 concurrentKernels= 1    // device's kernels can be computed in parallel
 deviceOverlap= 1        // Device can concurrently copy memory and execute a kernel
+
+// ================================
+
+clockRate= 1147000
+
+ECCEnabled= 1
+
+integrated= 0
+kernelExecTimeoutEnabled= 0
+
+l2CacheSize= 786432
+
+memoryBusWidth= 384
+memoryClockRate= 1548000
+memPitch= 2147483647
+
+pciBusID= 3
+pciDeviceID= 0
+pciDomainID= 0
+
+surfaceAlignment= 512
 ```
 
 ## supercomputer commands

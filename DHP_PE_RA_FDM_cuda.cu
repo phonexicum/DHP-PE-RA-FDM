@@ -3,19 +3,25 @@
 
 
 // ==================================================================================================================================================
-//                                                                                                                      DHP_PE_RA_FDM::GridDistribute
+//                                                                                                                     GridDistribute::GridDistribute
 // ==================================================================================================================================================
-pair<dim3, dim3> DHP_PE_RA_FDM::GridDistribute (const int demandedThreadNum) const{
+GridDistribute::GridDistribute (const cudaDeviceProp& devProp, const int tasksNum) {
 
-    dim3 blockDim = dim3(min(min(demandedThreadNum, devProp.maxThreadsPerBlock), devProp.maxThreadsDim[0]));
+    int maxThreads = devProp.multiProcessorCount * devProp.maxThreadsPerMultiProcessor;
 
-    int demandedBlockNum = (demandedThreadNum -1) / blockDim.x +1;
-    if (demandedBlockNum >= devProp.maxGridSize[0])
-        throw DHP_PE_RA_FDM_Exception("Too many number of threads for device demanded.");
+    tasksPerThread = (tasksNum -1) / maxThreads +1;
 
-    dim3 gridDim = dim3(demandedBlockNum);
-    
-    return make_pair(gridDim, blockDim);
+    demandedThreadsNumber = (tasksNum -1) / tasksPerThread +1;
+
+    // I exceed number of registers, though I have to reduce amount of threads per block
+    int availableThreadsPerBlock = devProp.maxThreadsPerBlock / 2;
+    demandedThreadsPerBlock = min(demandedThreadsNumber, availableThreadsPerBlock);
+
+    blockDim = dim3(demandedThreadsPerBlock);
+
+    demandedBlocksNumber = (demandedThreadsNumber -1) / blockDim.x +1;
+
+    gridDim = dim3(demandedBlocksNumber);
 }
 
 
@@ -24,5 +30,5 @@ pair<dim3, dim3> DHP_PE_RA_FDM::GridDistribute (const int demandedThreadNum) con
 // ==================================================================================================================================================
 void DHP_PE_RA_FDM::cudaAllStreamsSynchronize(const int begin, const int end) const{
     for (int i = max(0, begin); i <= min(cudaStreams_num -1, end); i++)
-        cudaStreamSynchronize(cudaStreams[i]);
+        SAFE_CUDA(cudaStreamSynchronize(cudaStreams[i]));
 }

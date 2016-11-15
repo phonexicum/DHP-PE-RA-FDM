@@ -96,11 +96,12 @@ int main (int argc, char** argv){
         long int finish_ms = tp.tv_sec * 1000 + tp.tv_usec / 1000;
 
         if (procParams.rank == 0){
-            cout << "output= " << fout_name << endl
-                 << "x_proc_num= " << x_proc_num << endl
-                 << "y_proc_num= " << y_proc_num << endl
-                 << "miliseconds= " << finish_ms - start_ms << endl
-                 << "iterationsCounter= " <<  superPrac_2.getIterationsCounter() << endl;
+            int ms = finish_ms - start_ms;
+            cout << "out= " << fout_name << endl
+                 << "x_p_N= " << x_proc_num << endl
+                 << "y_p_N= " << y_proc_num << endl
+                 << "ms= " << finish_ms - start_ms << " m:s= " << ms / 1000 / 60 << ":" << ms / 1000 % 60 <<  endl
+                 << "it= " <<  superPrac_2.getIterationsCounter() << endl;
         }
 
         superPrac_2.Print_p(fout_name);
@@ -182,7 +183,9 @@ void GetVideoCardProperties (const string& fout_name){
             << "cudaVersion= " << devProp.major << "." << devProp.minor << endl
             << endl
             << "multiProcessorCount= " << devProp.multiProcessorCount << endl
+            << "maxThreadsPerMultiProcessor= " << devProp.maxThreadsPerMultiProcessor << endl
             << "warpSize= " << devProp.warpSize << endl
+            << endl
             << "maxThreadsPerBlock= " << devProp.maxThreadsPerBlock << endl
             << "maxGridSize= " << devProp.maxGridSize[0] << " " << devProp.maxGridSize[1] << " " << devProp.maxGridSize[2] << endl
             << "maxThreadsDim= " << devProp.maxThreadsDim[0] << " " << devProp.maxThreadsDim[1] << " " << devProp.maxThreadsDim[2] << endl
@@ -198,7 +201,26 @@ void GetVideoCardProperties (const string& fout_name){
             << "asyncEngineCount= " << devProp.asyncEngineCount << endl
             << "concurrentKernels= " << devProp.concurrentKernels << endl
             << "deviceOverlap= " << devProp.deviceOverlap << endl
-            ;
+            << endl
+            << "clockRate= " << devProp.clockRate << endl
+            << endl
+            << "ECCEnabled= " << devProp.ECCEnabled << endl
+            << endl
+            << "integrated= " << devProp.integrated << endl
+            << "kernelExecTimeoutEnabled= " << devProp.kernelExecTimeoutEnabled << endl
+            << endl
+            << "l2CacheSize= " << devProp.l2CacheSize << endl
+            << endl
+            << "memoryBusWidth= " << devProp.memoryBusWidth << endl
+            << "memoryClockRate= " << devProp.memoryClockRate << endl
+            << "memPitch= " << devProp.memPitch << endl
+            << endl
+            << "pciBusID= " << devProp.pciBusID << endl
+            << "pciDeviceID= " << devProp.pciDeviceID << endl
+            << "pciDomainID= " << devProp.pciDomainID << endl
+            << endl
+            << "surfaceAlignment= " << devProp.surfaceAlignment << endl
+        ;
     }
 
     fout.close();

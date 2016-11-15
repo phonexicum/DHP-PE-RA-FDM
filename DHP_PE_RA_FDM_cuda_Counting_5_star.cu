@@ -5,21 +5,29 @@
 // ==================================================================================================================================================
 //                                                                                                                 cudakernel_Counting_5_star_insides
 // ==================================================================================================================================================
-__global__ void cudakernel_Counting_5_star_insides (double* const delta_f, const double* const f, const ProcComputingCoords procCoords,
-    const double hx, const double hy){
+__global__ void cudakernel_Counting_5_star_insides (double* const delta_f, const double* const f,
+    const ProcComputingCoords procCoords, const double hx2, const double hy2){
 
     int threadId = THREAD_IN_GRID_ID;
-    int i = 1 + threadId % (procCoords.x_cells_num -2);
-    int j = 1 + threadId / (procCoords.x_cells_num -2);
+    int threadNum = GRID_SIZE_IN_THREADS;
 
-    if (j < procCoords.y_cells_num -1)
-        delta_f[j * procCoords.x_cells_num + i] = (
-                (f[j * procCoords.x_cells_num + i  ] - f[j * procCoords.x_cells_num + i-1]) / hx -
-                (f[j * procCoords.x_cells_num + i+1] - f[j * procCoords.x_cells_num + i  ]) / hx
-            ) / hx + (
-                (f[ j    * procCoords.x_cells_num + i] - f[(j-1) * procCoords.x_cells_num + i]) / hy -
-                (f[(j+1) * procCoords.x_cells_num + i] - f[ j    * procCoords.x_cells_num + i]) / hy
-            ) / hy;
+    for (int k = threadId; true; k += threadNum) {
+
+        int i = 1 + k % (procCoords.x_cells_num -2);
+        int j = 1 + k / (procCoords.x_cells_num -2);
+        
+        if (j < procCoords.y_cells_num -1) {
+            delta_f[j * procCoords.x_cells_num + i] = (
+                    (f[j * procCoords.x_cells_num + i  ] - f[j * procCoords.x_cells_num + i-1]) -
+                    (f[j * procCoords.x_cells_num + i+1] - f[j * procCoords.x_cells_num + i  ])
+                ) / hx2 + (
+                    (f[ j    * procCoords.x_cells_num + i] - f[(j-1) * procCoords.x_cells_num + i]) -
+                    (f[(j+1) * procCoords.x_cells_num + i] - f[ j    * procCoords.x_cells_num + i])
+                ) / hy2;
+        } else {
+            break;
+        }
+    }
 }
 
 
@@ -29,9 +37,10 @@ __global__ void cudakernel_Counting_5_star_insides (double* const delta_f, const
 __global__ void cudakernel_Counting_5_star_Memcpy_vertical_message (double* const to, const double* const from, const int elem_num, const int step){
 
     int threadId = THREAD_IN_GRID_ID;
+    int threadNum = GRID_SIZE_IN_THREADS;
 
-    if (threadId < elem_num)
-        to[threadId] = from[threadId * step];
+    for (int k = threadId; k < elem_num; k += threadNum)
+        to[k] = from[k * step];
 }
 
 
@@ -39,23 +48,30 @@ __global__ void cudakernel_Counting_5_star_Memcpy_vertical_message (double* cons
 //                                                                                                              cudakernel_Counting_5_star_LR_delta_f
 // ==================================================================================================================================================
 __global__ void cudakernel_Counting_5_star_LR_delta_f (double* const delta_f, const double* const f, const double* const recv_message_lr,
-    const ProcComputingCoords procCoords, const double hx, const double hy){
+    const ProcComputingCoords procCoords, const double hx2, const double hy2){
 
     int threadId = THREAD_IN_GRID_ID;
+    int threadNum = GRID_SIZE_IN_THREADS;
 
-    int i = 0;
-    int j = 1 + threadId;
+    for (int k = threadId; true; k += threadNum) {
 
-    if (j < procCoords.y_cells_num -1)
-        if (not procCoords.left) {
-            delta_f[j * procCoords.x_cells_num + i] = (
-                    (f[j * procCoords.x_cells_num + i  ] - recv_message_lr[j]               ) / hx -
-                    (f[j * procCoords.x_cells_num + i+1] - f[j * procCoords.x_cells_num + i]) / hx
-                ) / hx + (
-                    (f[ j    * procCoords.x_cells_num + i] - f[(j-1) * procCoords.x_cells_num + i]) / hy -
-                    (f[(j+1) * procCoords.x_cells_num + i] - f[ j    * procCoords.x_cells_num + i]) / hy
-                ) / hy;
+        int i = 0;
+        int j = 1 + k;
+
+        if (j < procCoords.y_cells_num -1) {
+            if (not procCoords.left) {
+                delta_f[j * procCoords.x_cells_num + i] = (
+                        (f[j * procCoords.x_cells_num + i  ] - recv_message_lr[j]               ) -
+                        (f[j * procCoords.x_cells_num + i+1] - f[j * procCoords.x_cells_num + i])
+                    ) / hx2 + (
+                        (f[ j    * procCoords.x_cells_num + i] - f[(j-1) * procCoords.x_cells_num + i]) -
+                        (f[(j+1) * procCoords.x_cells_num + i] - f[ j    * procCoords.x_cells_num + i])
+                    ) / hy2;
+            }
+        } else {
+            break;
         }
+    }
 }
 
 
@@ -63,23 +79,30 @@ __global__ void cudakernel_Counting_5_star_LR_delta_f (double* const delta_f, co
 //                                                                                                              cudakernel_Counting_5_star_RL_delta_f
 // ==================================================================================================================================================
 __global__ void cudakernel_Counting_5_star_RL_delta_f (double* const delta_f, const double* const f, const double* const recv_message_rl,
-    const ProcComputingCoords procCoords, const double hx, const double hy){
+    const ProcComputingCoords procCoords, const double hx2, const double hy2){
 
     int threadId = THREAD_IN_GRID_ID;
+    int threadNum = GRID_SIZE_IN_THREADS;
 
-    int i = procCoords.x_cells_num -1;
-    int j = 1 + threadId;
+    for (int k = threadId; true; k += threadNum) {
 
-    if (j < procCoords.y_cells_num -1)
-        if (not procCoords.right) {
-            delta_f[j * procCoords.x_cells_num + i] = (
-                    (f[j * procCoords.x_cells_num + i  ] - f[j * procCoords.x_cells_num + i-1]) / hx -
-                    (recv_message_rl[j]                  - f[j * procCoords.x_cells_num + i  ]) / hx
-                ) / hx + (
-                    (f[ j    * procCoords.x_cells_num + i] - f[(j-1) * procCoords.x_cells_num + i]) / hy -
-                    (f[(j+1) * procCoords.x_cells_num + i] - f[ j    * procCoords.x_cells_num + i]) / hy
-                ) / hy;
+        int i = procCoords.x_cells_num -1;
+        int j = 1 + k;
+
+        if (j < procCoords.y_cells_num -1) {
+            if (not procCoords.right) {
+                delta_f[j * procCoords.x_cells_num + i] = (
+                        (f[j * procCoords.x_cells_num + i  ] - f[j * procCoords.x_cells_num + i-1]) -
+                        (recv_message_rl[j]                  - f[j * procCoords.x_cells_num + i  ])
+                    ) / hx2 + (
+                        (f[ j    * procCoords.x_cells_num + i] - f[(j-1) * procCoords.x_cells_num + i]) -
+                        (f[(j+1) * procCoords.x_cells_num + i] - f[ j    * procCoords.x_cells_num + i])
+                    ) / hy2;
+            }
+        } else {
+            break;
         }
+    }
 }
 
 
@@ -87,23 +110,30 @@ __global__ void cudakernel_Counting_5_star_RL_delta_f (double* const delta_f, co
 //                                                                                                              cudakernel_Counting_5_star_TD_delta_f
 // ==================================================================================================================================================
 __global__ void cudakernel_Counting_5_star_TD_delta_f (double* const delta_f, const double* const f, const double* const recv_message_td,
-    const ProcComputingCoords procCoords, const double hx, const double hy){
+    const ProcComputingCoords procCoords, const double hx2, const double hy2){
 
     int threadId = THREAD_IN_GRID_ID;
+    int threadNum = GRID_SIZE_IN_THREADS;
 
-    int i = 1 + threadId;
-    int j = 0;
+    for (int k = threadId; true; k += threadNum) {
 
-    if (i < procCoords.x_cells_num -1)
-        if (not procCoords.top) {
-            delta_f[j * procCoords.x_cells_num + i] = (
-                    (f[j * procCoords.x_cells_num + i  ] - f[j * procCoords.x_cells_num + i-1]) / hx -
-                    (f[j * procCoords.x_cells_num + i+1] - f[j * procCoords.x_cells_num + i  ]) / hx
-                ) / hx + (
-                    (f[ j    * procCoords.x_cells_num + i] - recv_message_td[i]               ) / hy -
-                    (f[(j+1) * procCoords.x_cells_num + i] - f[j * procCoords.x_cells_num + i]) / hy
-                ) / hy;
+        int i = 1 + k;
+        int j = 0;
+
+        if (i < procCoords.x_cells_num -1) {
+            if (not procCoords.top) {
+                delta_f[j * procCoords.x_cells_num + i] = (
+                        (f[j * procCoords.x_cells_num + i  ] - f[j * procCoords.x_cells_num + i-1]) -
+                        (f[j * procCoords.x_cells_num + i+1] - f[j * procCoords.x_cells_num + i  ])
+                    ) / hx2 + (
+                        (f[ j    * procCoords.x_cells_num + i] - recv_message_td[i]               ) -
+                        (f[(j+1) * procCoords.x_cells_num + i] - f[j * procCoords.x_cells_num + i])
+                    ) / hy2;
+            }
+        } else {
+            break;
         }
+    }
 }
 
 
@@ -111,23 +141,30 @@ __global__ void cudakernel_Counting_5_star_TD_delta_f (double* const delta_f, co
 //                                                                                                              cudakernel_Counting_5_star_BU_delta_f
 // ==================================================================================================================================================
 __global__ void cudakernel_Counting_5_star_BU_delta_f (double* const delta_f, const double* const f, const double* const recv_message_bu,
-    const ProcComputingCoords procCoords, const double hx, const double hy){
+    const ProcComputingCoords procCoords, const double hx2, const double hy2){
 
     int threadId = THREAD_IN_GRID_ID;
+    int threadNum = GRID_SIZE_IN_THREADS;
 
-    int i = 1 + threadId;
-    int j = procCoords.y_cells_num -1;
+    for (int k = threadId; true; k += threadNum) {
 
-    if (i < procCoords.x_cells_num -1)
-        if (not procCoords.bottom) {
-            delta_f[j * procCoords.x_cells_num + i] = (
-                    (f[j * procCoords.x_cells_num + i  ] - f[j * procCoords.x_cells_num + i-1]) / hx -
-                    (f[j * procCoords.x_cells_num + i+1] - f[j * procCoords.x_cells_num + i  ]) / hx
-                ) / hx + (
-                    (f[ j    * procCoords.x_cells_num + i] - f[(j-1) * procCoords.x_cells_num + i]) / hy -
-                    (recv_message_bu[i]                    - f[ j    * procCoords.x_cells_num + i]) / hy
-                ) / hy;
+        int i = 1 + k;
+        int j = procCoords.y_cells_num -1;
+
+        if (i < procCoords.x_cells_num -1) {
+            if (not procCoords.bottom) {
+                delta_f[j * procCoords.x_cells_num + i] = (
+                        (f[j * procCoords.x_cells_num + i  ] - f[j * procCoords.x_cells_num + i-1]) -
+                        (f[j * procCoords.x_cells_num + i+1] - f[j * procCoords.x_cells_num + i  ])
+                    ) / hx2 + (
+                        (f[ j    * procCoords.x_cells_num + i] - f[(j-1) * procCoords.x_cells_num + i]) -
+                        (recv_message_bu[i]                    - f[ j    * procCoords.x_cells_num + i])
+                    ) / hy2;
+            }
+        } else {
+            break;
         }
+    }
 }
 
 
@@ -136,23 +173,30 @@ __global__ void cudakernel_Counting_5_star_BU_delta_f (double* const delta_f, co
 // ==================================================================================================================================================
 __global__ void cudakernel_Counting_5_star_TDBU_delta_f (double* const delta_f, const double* const f,
     const double* const recv_message_td, const double* const recv_message_bu,
-    const ProcComputingCoords procCoords, const double hx, const double hy){
+    const ProcComputingCoords procCoords, const double hx2, const double hy2){
 
     int threadId = THREAD_IN_GRID_ID;
+    int threadNum = GRID_SIZE_IN_THREADS;
 
-    int i = 1 + threadId;
-    int j = 0;
+    for (int k = threadId; true; k += threadNum) {
 
-    if (i < procCoords.x_cells_num -1)
-        if (not procCoords.top and not procCoords.bottom) {
-            delta_f[j * procCoords.x_cells_num + i] = (
-                    (f[j * procCoords.x_cells_num + i  ] - f[j * procCoords.x_cells_num + i-1]) / hx -
-                    (f[j * procCoords.x_cells_num + i+1] - f[j * procCoords.x_cells_num + i  ]) / hx
-                ) / hx + (
-                    (f[ j    * procCoords.x_cells_num + i] - recv_message_td[i]               ) / hy -
-                    (recv_message_bu[i]                    - f[j * procCoords.x_cells_num + i]) / hy
-                ) / hy;
+        int i = 1 + k;
+        int j = 0;
+
+        if (i < procCoords.x_cells_num -1) {
+            if (not procCoords.top and not procCoords.bottom) {
+                delta_f[j * procCoords.x_cells_num + i] = (
+                        (f[j * procCoords.x_cells_num + i  ] - f[j * procCoords.x_cells_num + i-1]) -
+                        (f[j * procCoords.x_cells_num + i+1] - f[j * procCoords.x_cells_num + i  ])
+                    ) / hx2 + (
+                        (f[ j    * procCoords.x_cells_num + i] - recv_message_td[i]               ) -
+                        (recv_message_bu[i]                    - f[j * procCoords.x_cells_num + i])
+                    ) / hy2;
+            }
+        } else {
+            break;
         }
+    }
 }
 
 
@@ -161,23 +205,30 @@ __global__ void cudakernel_Counting_5_star_TDBU_delta_f (double* const delta_f, 
 // ==================================================================================================================================================
 __global__ void cudakernel_Counting_5_star_LRRL_delta_f (double* const delta_f, const double* const f,
     const double* const recv_message_lr, const double* const recv_message_rl,
-    const ProcComputingCoords procCoords, const double hx, const double hy){
+    const ProcComputingCoords procCoords, const double hx2, const double hy2){
 
     int threadId = THREAD_IN_GRID_ID;
+    int threadNum = GRID_SIZE_IN_THREADS;
 
-    int i = 0;
-    int j = 1 + threadId;
+    for (int k = threadId; true; k += threadNum) {
 
-    if (j < procCoords.y_cells_num -1)
-        if (not procCoords.left and not procCoords.right) {
-            delta_f[j * procCoords.x_cells_num + i] = (
-                    (f[j * procCoords.x_cells_num + i  ] - recv_message_lr[j]               ) / hx -
-                    (recv_message_rl[j]                  - f[j * procCoords.x_cells_num + i]) / hx
-                ) / hx + (
-                    (f[ j    * procCoords.x_cells_num + i] - f[(j-1) * procCoords.x_cells_num + i]) / hy -
-                    (f[(j+1) * procCoords.x_cells_num + i] - f[ j    * procCoords.x_cells_num + i]) / hy
-                ) / hy;
+        int i = 0;
+        int j = 1 + k;
+
+        if (j < procCoords.y_cells_num -1) {
+            if (not procCoords.left and not procCoords.right) {
+                delta_f[j * procCoords.x_cells_num + i] = (
+                        (f[j * procCoords.x_cells_num + i  ] - recv_message_lr[j]               ) -
+                        (recv_message_rl[j]                  - f[j * procCoords.x_cells_num + i])
+                    ) / hx2 + (
+                        (f[ j    * procCoords.x_cells_num + i] - f[(j-1) * procCoords.x_cells_num + i]) -
+                        (f[(j+1) * procCoords.x_cells_num + i] - f[ j    * procCoords.x_cells_num + i])
+                    ) / hy2;
+            }
+        } else {
+            break;
         }
+    }
 }
 
 
@@ -187,7 +238,7 @@ __global__ void cudakernel_Counting_5_star_LRRL_delta_f (double* const delta_f, 
 __global__ void cudakernel_Counting_5_star_nxm_corners (double* const delta_f, const double* const f,
     const double* const recv_message_lr, const double* const recv_message_rl,
     const double* const recv_message_td, const double* const recv_message_bu,
-    const ProcComputingCoords procCoords, const double hx, const double hy){
+    const ProcComputingCoords procCoords, const double hx2, const double hy2){
 
     int threadId = THREAD_IN_GRID_ID;
 
@@ -199,48 +250,48 @@ __global__ void cudakernel_Counting_5_star_nxm_corners (double* const delta_f, c
         i = 0;
         if (not procCoords.top and not procCoords.left) {
             delta_f[j * procCoords.x_cells_num + i] = (
-                    (f[j * procCoords.x_cells_num + i  ] - recv_message_lr [0] ) / hx -
-                    (f[j * procCoords.x_cells_num + i+1] - f[j * procCoords.x_cells_num + i  ]) / hx
-                ) / hx + (
-                    (f[ j    * procCoords.x_cells_num + i] - recv_message_td [0]                  ) / hy -
-                    (f[(j+1) * procCoords.x_cells_num + i] - f[ j    * procCoords.x_cells_num + i]) / hy
-                ) / hy;
+                    (f[j * procCoords.x_cells_num + i  ] - recv_message_lr [0] ) -
+                    (f[j * procCoords.x_cells_num + i+1] - f[j * procCoords.x_cells_num + i  ])
+                ) / hx2 + (
+                    (f[ j    * procCoords.x_cells_num + i] - recv_message_td [0]                  ) -
+                    (f[(j+1) * procCoords.x_cells_num + i] - f[ j    * procCoords.x_cells_num + i])
+                ) / hy2;
         }
     } else if (threadId == 1){
         j = 0;
         i = procCoords.x_cells_num -1;
         if (not procCoords.top and not procCoords.right){
             delta_f[j * procCoords.x_cells_num + i] = (
-                    (f[j * procCoords.x_cells_num + i  ] - f[j * procCoords.x_cells_num + i-1]) / hx -
-                    (recv_message_rl [0]                 - f[j * procCoords.x_cells_num + i  ]) / hx
-                ) / hx + (
-                    (f[ j    * procCoords.x_cells_num + i] - recv_message_td [procCoords.x_cells_num -1] ) / hy -
-                    (f[(j+1) * procCoords.x_cells_num + i] - f[ j    * procCoords.x_cells_num + i]) / hy
-                ) / hy;
+                    (f[j * procCoords.x_cells_num + i  ] - f[j * procCoords.x_cells_num + i-1]) -
+                    (recv_message_rl [0]                 - f[j * procCoords.x_cells_num + i  ])
+                ) / hx2 + (
+                    (f[ j    * procCoords.x_cells_num + i] - recv_message_td [procCoords.x_cells_num -1] ) -
+                    (f[(j+1) * procCoords.x_cells_num + i] - f[ j    * procCoords.x_cells_num + i])
+                ) / hy2;
         }
     } else if (threadId == 2){
         j = procCoords.y_cells_num -1;
         i = 0;
         if (not procCoords.bottom and not procCoords.left){
             delta_f[j * procCoords.x_cells_num + i] = (
-                    (f[j * procCoords.x_cells_num + i  ] - recv_message_lr[procCoords.y_cells_num -1] ) / hx -
-                    (f[j * procCoords.x_cells_num + i+1] - f[j * procCoords.x_cells_num + i  ]) / hx
-                ) / hx + (
-                    (f[ j    * procCoords.x_cells_num + i] - f[(j-1) * procCoords.x_cells_num + i]) / hy -
-                    (recv_message_bu [0]                   - f[ j    * procCoords.x_cells_num + i]) / hy
-                ) / hy;
+                    (f[j * procCoords.x_cells_num + i  ] - recv_message_lr[procCoords.y_cells_num -1] ) -
+                    (f[j * procCoords.x_cells_num + i+1] - f[j * procCoords.x_cells_num + i  ])
+                ) / hx2 + (
+                    (f[ j    * procCoords.x_cells_num + i] - f[(j-1) * procCoords.x_cells_num + i]) -
+                    (recv_message_bu [0]                   - f[ j    * procCoords.x_cells_num + i])
+                ) / hy2;
         }
     } else if (threadId == 3){
         j = procCoords.y_cells_num -1;
         i = procCoords.x_cells_num -1;
         if (not procCoords.bottom and not procCoords.right){
             delta_f[j * procCoords.x_cells_num + i] = (
-                    (f[j * procCoords.x_cells_num + i  ] - f[j * procCoords.x_cells_num + i-1]) / hx -
-                    (recv_message_rl [procCoords.y_cells_num -1] - f[j * procCoords.x_cells_num + i  ]) / hx
-                ) / hx + (
-                    (f[ j    * procCoords.x_cells_num + i] - f[(j-1) * procCoords.x_cells_num + i]) / hy -
-                    (recv_message_bu [procCoords.x_cells_num -1] - f[ j    * procCoords.x_cells_num + i]) / hy
-                ) / hy;
+                    (f[j * procCoords.x_cells_num + i  ] - f[j * procCoords.x_cells_num + i-1]) -
+                    (recv_message_rl [procCoords.y_cells_num -1] - f[j * procCoords.x_cells_num + i  ])
+                ) / hx2 + (
+                    (f[ j    * procCoords.x_cells_num + i] - f[(j-1) * procCoords.x_cells_num + i]) -
+                    (recv_message_bu [procCoords.x_cells_num -1] - f[ j    * procCoords.x_cells_num + i])
+                ) / hy2;
         }
     }
 }
@@ -252,7 +303,7 @@ __global__ void cudakernel_Counting_5_star_nxm_corners (double* const delta_f, c
 __global__ void cudakernel_Counting_5_star_nx1_corners (double* const delta_f, const double* const f,
     const double* const recv_message_lr, const double* const recv_message_rl,
     const double* const recv_message_td, const double* const recv_message_bu,
-    const ProcComputingCoords procCoords, const double hx, const double hy){
+    const ProcComputingCoords procCoords, const double hx2, const double hy2){
 
     int threadId = THREAD_IN_GRID_ID;
 
@@ -264,24 +315,24 @@ __global__ void cudakernel_Counting_5_star_nx1_corners (double* const delta_f, c
         i = 0;
         if (not procCoords.top and not procCoords.bottom and not procCoords.left) {
             delta_f[j * procCoords.x_cells_num + i] = (
-                    (f[j * procCoords.x_cells_num + i  ] - recv_message_lr [0] ) / hx -
-                    (f[j * procCoords.x_cells_num + i+1] - f[j * procCoords.x_cells_num + i  ]) / hx
-                ) / hx + (
-                    (f[ j    * procCoords.x_cells_num + i] - recv_message_td [0]                  ) / hy -
-                    (recv_message_bu[0]                    - f[ j    * procCoords.x_cells_num + i]) / hy
-                ) / hy;
+                    (f[j * procCoords.x_cells_num + i  ] - recv_message_lr [0] ) -
+                    (f[j * procCoords.x_cells_num + i+1] - f[j * procCoords.x_cells_num + i  ])
+                ) / hx2 + (
+                    (f[ j    * procCoords.x_cells_num + i] - recv_message_td [0]                  ) -
+                    (recv_message_bu[0]                    - f[ j    * procCoords.x_cells_num + i])
+                ) / hy2;
         }
     } else if (threadId == 1){
         j = 0;
         i = procCoords.x_cells_num -1;
         if (not procCoords.top and not procCoords.bottom and not procCoords.right){
             delta_f[j * procCoords.x_cells_num + i] = (
-                    (f[j * procCoords.x_cells_num + i  ] - f[j * procCoords.x_cells_num + i-1]) / hx -
-                    (recv_message_rl [0]                 - f[j * procCoords.x_cells_num + i  ]) / hx
-                ) / hx + (
-                    (f[ j    * procCoords.x_cells_num + i] - recv_message_td [procCoords.x_cells_num -1] ) / hy -
-                    (recv_message_bu [procCoords.x_cells_num -1] - f[ j    * procCoords.x_cells_num + i]) / hy
-                ) / hy;
+                    (f[j * procCoords.x_cells_num + i  ] - f[j * procCoords.x_cells_num + i-1]) -
+                    (recv_message_rl [0]                 - f[j * procCoords.x_cells_num + i  ])
+                ) / hx2 + (
+                    (f[ j    * procCoords.x_cells_num + i] - recv_message_td [procCoords.x_cells_num -1]) -
+                    (recv_message_bu [procCoords.x_cells_num -1] - f[ j    * procCoords.x_cells_num + i])
+                ) / hy2;
         }
     }
 }
@@ -293,7 +344,7 @@ __global__ void cudakernel_Counting_5_star_nx1_corners (double* const delta_f, c
 __global__ void cudakernel_Counting_5_star_1xm_corners (double* const delta_f, const double* const f,
     const double* const recv_message_lr, const double* const recv_message_rl,
     const double* const recv_message_td, const double* const recv_message_bu,
-    const ProcComputingCoords procCoords, const double hx, const double hy){
+    const ProcComputingCoords procCoords, const double hx2, const double hy2){
 
     int threadId = THREAD_IN_GRID_ID;
 
@@ -305,24 +356,24 @@ __global__ void cudakernel_Counting_5_star_1xm_corners (double* const delta_f, c
         i = 0;
         if (not procCoords.left and not procCoords.right and not procCoords.top) {
             delta_f[j * procCoords.x_cells_num + i] = (
-                    (f[j * procCoords.x_cells_num + i  ] - recv_message_lr [0]                ) / hx -
-                    (recv_message_rl[0]                  - f[j * procCoords.x_cells_num + i  ]) / hx
-                ) / hx + (
-                    (f[ j    * procCoords.x_cells_num + i] - recv_message_td [0]                  ) / hy -
-                    (f[(j+1) * procCoords.x_cells_num + i] - f[ j    * procCoords.x_cells_num + i]) / hy
-                ) / hy;
+                    (f[j * procCoords.x_cells_num + i  ] - recv_message_lr [0]                ) -
+                    (recv_message_rl[0]                  - f[j * procCoords.x_cells_num + i  ])
+                ) / hx2 + (
+                    (f[ j    * procCoords.x_cells_num + i] - recv_message_td [0]                  ) -
+                    (f[(j+1) * procCoords.x_cells_num + i] - f[ j    * procCoords.x_cells_num + i])
+                ) / hy2;
         }
     } else if (threadId == 1){
         j = procCoords.y_cells_num -1;
         i = 0;
         if (not procCoords.left and not procCoords.right and not procCoords.bottom){
             delta_f[j * procCoords.x_cells_num + i] = (
-                    (f[j * procCoords.x_cells_num + i  ] - recv_message_lr[j]                   ) / hx -
-                    (recv_message_rl[j]                  - f[j * procCoords.x_cells_num + i  ]  ) / hx
-                ) / hx + (
-                    (f[ j    * procCoords.x_cells_num + i] - f[(j-1) * procCoords.x_cells_num + i]) / hy -
-                    (recv_message_bu [0]                   - f[ j    * procCoords.x_cells_num + i]) / hy
-                ) / hy;
+                    (f[j * procCoords.x_cells_num + i  ] - recv_message_lr[j]                   ) -
+                    (recv_message_rl[j]                  - f[j * procCoords.x_cells_num + i  ]  )
+                ) / hx2 + (
+                    (f[ j    * procCoords.x_cells_num + i] - f[(j-1) * procCoords.x_cells_num + i]) -
+                    (recv_message_bu [0]                   - f[ j    * procCoords.x_cells_num + i])
+                ) / hy2;
         }
     }
 }
@@ -334,18 +385,18 @@ __global__ void cudakernel_Counting_5_star_1xm_corners (double* const delta_f, c
 __global__ void cudakernel_Counting_5_star_1x1_corners (double* const delta_f, const double* const f,
     const double* const recv_message_lr, const double* const recv_message_rl,
     const double* const recv_message_td, const double* const recv_message_bu,
-    const ProcComputingCoords procCoords, const double hx, const double hy){
+    const ProcComputingCoords procCoords, const double hx2, const double hy2){
 
     int i = 0;
     int j = 0;
     if (not procCoords.left and not procCoords.right and not procCoords.top and not procCoords.bottom){
         delta_f[j * procCoords.x_cells_num + i] = (
-                (f[j * procCoords.x_cells_num + i  ] - recv_message_lr[j]                   ) / hx -
-                (recv_message_rl[j]                  - f[j * procCoords.x_cells_num + i  ]  ) / hx
-            ) / hx + (
-                (f[ j    * procCoords.x_cells_num + i] - recv_message_td[0]                   ) / hy -
-                (recv_message_bu [0]                   - f[ j    * procCoords.x_cells_num + i]) / hy
-            ) / hy;
+                (f[j * procCoords.x_cells_num + i  ] - recv_message_lr[j]                   ) -
+                (recv_message_rl[j]                  - f[j * procCoords.x_cells_num + i  ]  )
+            ) / hx2 + (
+                (f[ j    * procCoords.x_cells_num + i] - recv_message_td[0]                   ) -
+                (recv_message_bu [0]                   - f[ j    * procCoords.x_cells_num + i])
+            ) / hy2;
     }
 
 }
@@ -359,8 +410,8 @@ void DHP_PE_RA_FDM::cuda_Counting_5_star (double* const delta_f, const double* c
     int ret = MPI_SUCCESS;
 
     int dimension = (procCoords.x_cells_num -2) * (procCoords.y_cells_num -2);
-    pair<dim3, dim3> mesh = GridDistribute(dimension);
-    cudakernel_Counting_5_star_insides<<<mesh.first, mesh.second, 0, cudaStreams[0]>>> (delta_f, f, procCoords, hx, hy);
+    GridDistribute mesh (devProp, dimension);
+    cudakernel_Counting_5_star_insides<<<mesh.gridDim, mesh.blockDim, 0, cudaStreams[0]>>> (delta_f, f, procCoords, hx2, hy2); CUDA_CHECK_LAST_ERROR;
 
     // ==========================================
     // memory allocation
@@ -387,14 +438,14 @@ void DHP_PE_RA_FDM::cuda_Counting_5_star (double* const delta_f, const double* c
     // initialize send buffers
     // ==========================================
 
-    mesh = GridDistribute(procCoords.y_cells_num);
+    mesh = GridDistribute (devProp, procCoords.y_cells_num);
 
     // left -> right
-    cudakernel_Counting_5_star_Memcpy_vertical_message<<<mesh.first, mesh.second, 0, cudaStreams[1]>>> (
-        send_message_lr, f + procCoords.x_cells_num -1, procCoords.y_cells_num, procCoords.x_cells_num);
+    cudakernel_Counting_5_star_Memcpy_vertical_message<<<mesh.gridDim, mesh.blockDim, 0, cudaStreams[1]>>> (
+        send_message_lr, f + procCoords.x_cells_num -1, procCoords.y_cells_num, procCoords.x_cells_num); CUDA_CHECK_LAST_ERROR;
     // right -> left
-    cudakernel_Counting_5_star_Memcpy_vertical_message<<<mesh.first, mesh.second, 0, cudaStreams[2]>>> (
-        send_message_rl, f, procCoords.y_cells_num, procCoords.x_cells_num);
+    cudakernel_Counting_5_star_Memcpy_vertical_message<<<mesh.gridDim, mesh.blockDim, 0, cudaStreams[2]>>> (
+        send_message_rl, f, procCoords.y_cells_num, procCoords.x_cells_num); CUDA_CHECK_LAST_ERROR;
     // top -> down
     SAFE_CUDA(cudaMemcpyAsync(send_message_td, f + (procCoords.y_cells_num -1) * procCoords.x_cells_num, procCoords.x_cells_num * sizeof(*f),
         cudaMemcpyDeviceToHost, cudaStreams[3]));
@@ -412,7 +463,7 @@ void DHP_PE_RA_FDM::cuda_Counting_5_star (double* const delta_f, const double* c
     // left -> right
     if (not procCoords.right){
 
-        cudaStreamSynchronize(cudaStreams[1]);
+        cudaStreamSynchronize(cudaStreams[1]); CUDA_CHECK_LAST_ERROR;
         ret = MPI_Isend(
             send_message_lr,                            // void* buffer
             procCoords.y_cells_num,                     // int count
@@ -429,7 +480,7 @@ void DHP_PE_RA_FDM::cuda_Counting_5_star (double* const delta_f, const double* c
     // right -> left
     if (not procCoords.left){
 
-        cudaStreamSynchronize(cudaStreams[2]);
+        cudaStreamSynchronize(cudaStreams[2]); CUDA_CHECK_LAST_ERROR;
         ret = MPI_Isend(
             send_message_rl,                            // void* buffer
             procCoords.y_cells_num,                     // int count
@@ -446,7 +497,7 @@ void DHP_PE_RA_FDM::cuda_Counting_5_star (double* const delta_f, const double* c
     // top -> down
     if (not procCoords.bottom){
 
-        cudaStreamSynchronize(cudaStreams[3]);
+        cudaStreamSynchronize(cudaStreams[3]); CUDA_CHECK_LAST_ERROR;
         ret = MPI_Isend(
             send_message_td,                            // void* buffer
             procCoords.x_cells_num,                     // int count
@@ -463,7 +514,7 @@ void DHP_PE_RA_FDM::cuda_Counting_5_star (double* const delta_f, const double* c
     // bottom -> up
     if (not procCoords.top){
 
-        cudaStreamSynchronize(cudaStreams[4]);
+        cudaStreamSynchronize(cudaStreams[4]); CUDA_CHECK_LAST_ERROR;
         ret = MPI_Isend(
             send_message_bu,                            // void* buffer
             procCoords.x_cells_num,                     // int count
@@ -567,64 +618,69 @@ void DHP_PE_RA_FDM::cuda_Counting_5_star (double* const delta_f, const double* c
     if (procCoords.x_cells_num > 1 and procCoords.y_cells_num > 1)
     {
         // left -> right
-        mesh = GridDistribute(procCoords.y_cells_num -2);
-        cudakernel_Counting_5_star_LR_delta_f<<<mesh.first, mesh.second, 0, cudaStreams[5]>>> (delta_f, f, recv_message_lr, procCoords, hx, hy);
+        mesh = GridDistribute (devProp, procCoords.y_cells_num -2);
+        cudakernel_Counting_5_star_LR_delta_f<<<mesh.gridDim, mesh.blockDim, 0, cudaStreams[5]>>> (
+            delta_f, f, recv_message_lr, procCoords, hx2, hy2); CUDA_CHECK_LAST_ERROR;
 
         // right -> left
-        mesh = GridDistribute(procCoords.y_cells_num -2);
-        cudakernel_Counting_5_star_RL_delta_f<<<mesh.first, mesh.second, 0, cudaStreams[6]>>> (delta_f, f, recv_message_rl, procCoords, hx, hy);
+        mesh = GridDistribute (devProp, procCoords.y_cells_num -2);
+        cudakernel_Counting_5_star_RL_delta_f<<<mesh.gridDim, mesh.blockDim, 0, cudaStreams[6]>>> (
+            delta_f, f, recv_message_rl, procCoords, hx2, hy2); CUDA_CHECK_LAST_ERROR;
 
         // top -> down
-        mesh = GridDistribute(procCoords.x_cells_num -2);
-        cudakernel_Counting_5_star_TD_delta_f<<<mesh.first, mesh.second, 0, cudaStreams[7]>>> (delta_f, f, recv_message_td, procCoords, hx, hy);
+        mesh = GridDistribute (devProp, procCoords.x_cells_num -2);
+        cudakernel_Counting_5_star_TD_delta_f<<<mesh.gridDim, mesh.blockDim, 0, cudaStreams[7]>>> (
+            delta_f, f, recv_message_td, procCoords, hx2, hy2); CUDA_CHECK_LAST_ERROR;
 
         // bottom -> up
-        mesh = GridDistribute(procCoords.x_cells_num -2);
-        cudakernel_Counting_5_star_BU_delta_f<<<mesh.first, mesh.second, 0, cudaStreams[8]>>> (delta_f, f, recv_message_bu, procCoords, hx, hy);
+        mesh = GridDistribute (devProp, procCoords.x_cells_num -2);
+        cudakernel_Counting_5_star_BU_delta_f<<<mesh.gridDim, mesh.blockDim, 0, cudaStreams[8]>>> (
+            delta_f, f, recv_message_bu, procCoords, hx2, hy2); CUDA_CHECK_LAST_ERROR;
 
         // ==========================================
         // Counting delta_f's corners
         // ==========================================
 
         cudakernel_Counting_5_star_nxm_corners<<<dim3(1), dim3(4), 0, cudaStreams[9]>>> (
-            delta_f, f, recv_message_lr, recv_message_rl, recv_message_td, recv_message_bu, procCoords, hx, hy);
+            delta_f, f, recv_message_lr, recv_message_rl, recv_message_td, recv_message_bu, procCoords, hx2, hy2); CUDA_CHECK_LAST_ERROR;
 
     } else if (procCoords.x_cells_num > 1 and procCoords.y_cells_num == 1){
         // Counting regions n x 1, where n > 1
 
         // top -> down
         // bottom -> up
-        mesh = GridDistribute(procCoords.x_cells_num -2);
-        cudakernel_Counting_5_star_TDBU_delta_f<<<mesh.first, mesh.second, 0, cudaStreams[5]>>> (
-            delta_f, f, recv_message_td, recv_message_bu, procCoords, hx, hy);
+        mesh = GridDistribute (devProp, procCoords.x_cells_num -2);
+        cudakernel_Counting_5_star_TDBU_delta_f<<<mesh.gridDim, mesh.blockDim, 0, cudaStreams[5]>>> (
+            delta_f, f, recv_message_td, recv_message_bu, procCoords, hx2, hy2); CUDA_CHECK_LAST_ERROR;
 
         // ==========================================
         // Counting delta_f's corners
         // ==========================================
 
         cudakernel_Counting_5_star_nx1_corners<<<dim3(1), dim3(2), 0, cudaStreams[6]>>> (
-            delta_f, f, recv_message_lr, recv_message_rl, recv_message_td, recv_message_bu, procCoords, hx, hy);
+            delta_f, f, recv_message_lr, recv_message_rl, recv_message_td, recv_message_bu, procCoords, hx2, hy2); CUDA_CHECK_LAST_ERROR;
 
     } else if (procCoords.x_cells_num == 1 and procCoords.y_cells_num > 1){
         // Counting regions 1 x m, where m > 1
 
         // left -> right
         // right -> left
-        mesh = GridDistribute(procCoords.y_cells_num -2);
-        cudakernel_Counting_5_star_TDBU_delta_f<<<mesh.first, mesh.second, 0, cudaStreams[5]>>> (delta_f, f, recv_message_lr, recv_message_rl, procCoords, hx, hy);
+        mesh = GridDistribute (devProp, procCoords.y_cells_num -2);
+        cudakernel_Counting_5_star_TDBU_delta_f<<<mesh.gridDim, mesh.blockDim, 0, cudaStreams[5]>>> (
+            delta_f, f, recv_message_lr, recv_message_rl, procCoords, hx2, hy2); CUDA_CHECK_LAST_ERROR;
 
         // ==========================================
         // Counting delta_f's corners
         // ==========================================
 
         cudakernel_Counting_5_star_1xm_corners<<<dim3(1), dim3(2), 0, cudaStreams[6]>>> (
-            delta_f, f, recv_message_lr, recv_message_rl, recv_message_td, recv_message_bu, procCoords, hx, hy);
+            delta_f, f, recv_message_lr, recv_message_rl, recv_message_td, recv_message_bu, procCoords, hx2, hy2); CUDA_CHECK_LAST_ERROR;
 
     } else if (procCoords.x_cells_num == 1 and procCoords.y_cells_num == 1){
         // Counting regions 1 x 1
 
         cudakernel_Counting_5_star_1x1_corners<<<dim3(1), dim3(1), 0, cudaStreams[5]>>> (
-            delta_f, f, recv_message_lr, recv_message_rl, recv_message_td, recv_message_bu, procCoords, hx, hy);
+            delta_f, f, recv_message_lr, recv_message_rl, recv_message_td, recv_message_bu, procCoords, hx2, hy2); CUDA_CHECK_LAST_ERROR;
     }
 
     // ==========================================
