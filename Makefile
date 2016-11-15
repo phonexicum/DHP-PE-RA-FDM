@@ -10,7 +10,7 @@ lcompile: $(INCLUDES) $(SOURCES) $(CUSOURCES)
 	cp ./superPrac2 ~/_scratch/superPrac2
 
 
-.PHONY: clean graph lmount upload
+.PHONY: clean graph upload lmount lcompile lprepare
 
 clean:
 	rm -rf superPrac2 output* *.o

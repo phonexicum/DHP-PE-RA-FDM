@@ -3,15 +3,13 @@
 #include <exception>
 #include <sstream>
 #include <string>
-#include <utility>
 
 #include <mpi.h>
 #include <cuda_runtime.h>
 
 using std::exception;
-using std::string;
 using std::stringstream;
-using std::pair;
+using std::string;
 
 #define SAFE_CUDA(err)\
     if (err != cudaSuccess){ \
@@ -197,7 +195,7 @@ class DHP_PE_RA_FDM {
     double* cuda_sum_aggr_arr1;
     double* cuda_sum_aggr_arr2;
 
-    // p is a double array allocated ON DEVICE
+    // p and p_prev is a double array allocated ON DEVICE
     // p(i=x, j=y) = p [y * row_len + x]
     double* p;
     double* p_prev;

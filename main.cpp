@@ -15,7 +15,6 @@
 
 
 #include <sys/time.h> // gettimeofday
-#include <unistd.h> // sleep
 
 
 #include "DHP_PE_RA_FDM.h"

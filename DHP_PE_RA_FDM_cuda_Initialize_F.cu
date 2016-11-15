@@ -23,8 +23,7 @@ __global__ void cudakernel_Initialize_F_boundary_fi_horizontal (double* const f,
 //                                                                                                       cudakernel_Initialize_F_boundary_fi_vertical
 // ==================================================================================================================================================
 __global__ void cudakernel_Initialize_F_boundary_fi_vertical (double* const f, const ProcComputingCoords procCoords, 
-    const double X1, const double Y1, const double hx, const double hy,
-    const int i_shift) {
+    const double X1, const double Y1, const double hx, const double hy, const int i_shift) {
 
     int threadId = THREAD_IN_GRID_ID;
     int threadNum = GRID_SIZE_IN_THREADS;
@@ -87,7 +86,7 @@ void DHP_PE_RA_FDM::cuda_Initialize_P_and_Pprev (){
         //     cudaStreams[8 + j % 5]));
     }
 
-    cudaAllStreamsSynchronize(0, 13);
+    cudaAllStreamsSynchronize(0, 12);
 }
 
 

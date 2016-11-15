@@ -1,5 +1,0 @@
-output= output/bgp-out-256-1000
-x_proc_num= 16
-y_proc_num= 16
-miliseconds= 12879
-iterationsCounter= 1416

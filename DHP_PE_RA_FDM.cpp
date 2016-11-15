@@ -149,7 +149,7 @@ debug_fname (string("debug.txt"))
 
     // Setting memory mapping
     SAFE_CUDA(cudaSetDeviceFlags(cudaDeviceMapHost));
-    SAFE_CUDA((cudaSetDeviceFlags(cudaDeviceBlockingSync)));
+    SAFE_CUDA(cudaSetDeviceFlags(cudaDeviceBlockingSync));
     SAFE_CUDA(cudaDeviceSetCacheConfig(cudaFuncCachePreferL1));
 
     SAFE_CUDA(cudaSetDevice(cudaDeviceNum));
@@ -159,13 +159,6 @@ debug_fname (string("debug.txt"))
     if (devProp.canMapHostMemory != 1 and devProp.unifiedAddressing != 1 and devProp.major < 2) {
         throw DHP_PE_RA_FDM_Exception ("Hardware does not fit this program. CUDA major version must be >= 2,"
                                        " memory must be able to be mapped and UAD must be enabled.");
-    }
-    if (devProp.maxThreadsPerBlock * devProp.maxGridSize[0] < grid_size_x_ +1 or
-        devProp.maxThreadsPerBlock * devProp.maxGridSize[0] < grid_size_y_ +1 or
-        devProp.maxThreadsPerBlock * devProp.maxGridSize[0] < (grid_size_x_ +1) * (grid_size_y_ +1)
-        ){
-        throw DHP_PE_RA_FDM_Exception ("Hardware does not fit this program. Device's devProp.maxThreadsPerBlock * devProp.maxGridSize[0]"
-            "less than mount of matrix cells.");
     }
 
     for (int i = 0; i < cudaStreams_num; i++)
