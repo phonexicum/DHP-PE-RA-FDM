@@ -98,6 +98,11 @@ hy ((y2-y1)/grid_size_y_),
 grid_size_x (grid_size_x_),
 grid_size_y (grid_size_y_),
 eps (eps_),
+
+hxhy (hx*hy),
+hx2 (hx*hx),
+hy2 (hy*hy),
+
 descent_step_iterations (descent_step_iterations_),
 iterations_counter (0),
 
@@ -363,7 +368,7 @@ double DHP_PE_RA_FDM::ComputingScalarProduct(const double* const f1, const doubl
     #pragma omp for schedule (static) reduction(+:scalar_product)
     for (int j = 0; j < procCoords.y_cells_num; j++){
         for (int i = 0; i < procCoords.x_cells_num; i++){
-            scalar_product += hx * hy * f1[j * procCoords.x_cells_num + i] * f2[j * procCoords.x_cells_num + i];
+            scalar_product += hxhy * f1[j * procCoords.x_cells_num + i] * f2[j * procCoords.x_cells_num + i];
         }
     }
 
@@ -441,12 +446,12 @@ void DHP_PE_RA_FDM::Counting_5_star (double* const delta_f, const double* const 
     for (j = 1; j < procCoords.y_cells_num -1; j++){
         for (i = 1; i < procCoords.x_cells_num -1; i++){
             delta_f[j * procCoords.x_cells_num + i] = (
-                    (f[j * procCoords.x_cells_num + i  ] - f[j * procCoords.x_cells_num + i-1]) / hx -
-                    (f[j * procCoords.x_cells_num + i+1] - f[j * procCoords.x_cells_num + i  ]) / hx
-                ) / hx + (
-                    (f[ j    * procCoords.x_cells_num + i] - f[(j-1) * procCoords.x_cells_num + i]) / hy -
-                    (f[(j+1) * procCoords.x_cells_num + i] - f[ j    * procCoords.x_cells_num + i]) / hy
-                ) / hy;
+                    (f[j * procCoords.x_cells_num + i  ] - f[j * procCoords.x_cells_num + i-1]) -
+                    (f[j * procCoords.x_cells_num + i+1] - f[j * procCoords.x_cells_num + i  ])
+                ) / hx2 + (
+                    (f[ j    * procCoords.x_cells_num + i] - f[(j-1) * procCoords.x_cells_num + i]) -
+                    (f[(j+1) * procCoords.x_cells_num + i] - f[ j    * procCoords.x_cells_num + i])
+                ) / hy2;
         }
     }
 
@@ -680,12 +685,12 @@ void DHP_PE_RA_FDM::Counting_5_star (double* const delta_f, const double* const 
                 #pragma omp for schedule (static) nowait
                 for (j = 1; j < procCoords.y_cells_num -1; j++){
                     delta_f[j * procCoords.x_cells_num + i] = (
-                            (f[j * procCoords.x_cells_num + i  ] - recv_message_lr[j]               ) / hx -
-                            (f[j * procCoords.x_cells_num + i+1] - f[j * procCoords.x_cells_num + i]) / hx
-                        ) / hx + (
-                            (f[ j    * procCoords.x_cells_num + i] - f[(j-1) * procCoords.x_cells_num + i]) / hy -
-                            (f[(j+1) * procCoords.x_cells_num + i] - f[ j    * procCoords.x_cells_num + i]) / hy
-                        ) / hy;
+                            (f[j * procCoords.x_cells_num + i  ] - recv_message_lr[j]               ) -
+                            (f[j * procCoords.x_cells_num + i+1] - f[j * procCoords.x_cells_num + i])
+                        ) / hx2 + (
+                            (f[ j    * procCoords.x_cells_num + i] - f[(j-1) * procCoords.x_cells_num + i]) -
+                            (f[(j+1) * procCoords.x_cells_num + i] - f[ j    * procCoords.x_cells_num + i])
+                        ) / hy2;
                 }
             }
 
@@ -695,12 +700,12 @@ void DHP_PE_RA_FDM::Counting_5_star (double* const delta_f, const double* const 
                 #pragma omp for schedule (static) nowait
                 for (j = 1; j < procCoords.y_cells_num -1; j++){
                     delta_f[j * procCoords.x_cells_num + i] = (
-                            (f[j * procCoords.x_cells_num + i  ] - f[j * procCoords.x_cells_num + i-1]) / hx -
-                            (recv_message_rl[j]                  - f[j * procCoords.x_cells_num + i  ]) / hx
-                        ) / hx + (
-                            (f[ j    * procCoords.x_cells_num + i] - f[(j-1) * procCoords.x_cells_num + i]) / hy -
-                            (f[(j+1) * procCoords.x_cells_num + i] - f[ j    * procCoords.x_cells_num + i]) / hy
-                        ) / hy;
+                            (f[j * procCoords.x_cells_num + i  ] - f[j * procCoords.x_cells_num + i-1]) -
+                            (recv_message_rl[j]                  - f[j * procCoords.x_cells_num + i  ])
+                        ) / hx2 + (
+                            (f[ j    * procCoords.x_cells_num + i] - f[(j-1) * procCoords.x_cells_num + i]) -
+                            (f[(j+1) * procCoords.x_cells_num + i] - f[ j    * procCoords.x_cells_num + i])
+                        ) / hy2;
                 }
             }
 
@@ -710,12 +715,12 @@ void DHP_PE_RA_FDM::Counting_5_star (double* const delta_f, const double* const 
                 #pragma omp for schedule (static) nowait
                 for (i = 1; i < procCoords.x_cells_num -1; i++){
                     delta_f[j * procCoords.x_cells_num + i] = (
-                            (f[j * procCoords.x_cells_num + i  ] - f[j * procCoords.x_cells_num + i-1]) / hx -
-                            (f[j * procCoords.x_cells_num + i+1] - f[j * procCoords.x_cells_num + i  ]) / hx
-                        ) / hx + (
-                            (f[ j    * procCoords.x_cells_num + i] - recv_message_td[i]               ) / hy -
-                            (f[(j+1) * procCoords.x_cells_num + i] - f[j * procCoords.x_cells_num + i]) / hy
-                        ) / hy;
+                            (f[j * procCoords.x_cells_num + i  ] - f[j * procCoords.x_cells_num + i-1]) -
+                            (f[j * procCoords.x_cells_num + i+1] - f[j * procCoords.x_cells_num + i  ])
+                        ) / hx2 + (
+                            (f[ j    * procCoords.x_cells_num + i] - recv_message_td[i]               ) -
+                            (f[(j+1) * procCoords.x_cells_num + i] - f[j * procCoords.x_cells_num + i])
+                        ) / hy2;
                 }
             }
 
@@ -725,12 +730,12 @@ void DHP_PE_RA_FDM::Counting_5_star (double* const delta_f, const double* const 
                 #pragma omp for schedule (static) nowait
                 for (i = 1; i < procCoords.x_cells_num -1; i++){
                     delta_f[j * procCoords.x_cells_num + i] = (
-                            (f[j * procCoords.x_cells_num + i  ] - f[j * procCoords.x_cells_num + i-1]) / hx -
-                            (f[j * procCoords.x_cells_num + i+1] - f[j * procCoords.x_cells_num + i  ]) / hx
-                        ) / hx + (
-                            (f[ j    * procCoords.x_cells_num + i] - f[(j-1) * procCoords.x_cells_num + i]) / hy -
-                            (recv_message_bu[i]                    - f[ j    * procCoords.x_cells_num + i]) / hy
-                        ) / hy;
+                            (f[j * procCoords.x_cells_num + i  ] - f[j * procCoords.x_cells_num + i-1]) -
+                            (f[j * procCoords.x_cells_num + i+1] - f[j * procCoords.x_cells_num + i  ])
+                        ) / hx2 + (
+                            (f[ j    * procCoords.x_cells_num + i] - f[(j-1) * procCoords.x_cells_num + i]) -
+                            (recv_message_bu[i]                    - f[ j    * procCoords.x_cells_num + i])
+                        ) / hy2;
                 }
             }
         }
@@ -748,12 +753,12 @@ void DHP_PE_RA_FDM::Counting_5_star (double* const delta_f, const double* const 
                 i = 0;
                 if (not procCoords.top and not procCoords.left) {
                     delta_f[j * procCoords.x_cells_num + i] = (
-                            (f[j * procCoords.x_cells_num + i  ] - recv_message_lr [0] ) / hx -
-                            (f[j * procCoords.x_cells_num + i+1] - f[j * procCoords.x_cells_num + i  ]) / hx
-                        ) / hx + (
-                            (f[ j    * procCoords.x_cells_num + i] - recv_message_td [0]                  ) / hy -
-                            (f[(j+1) * procCoords.x_cells_num + i] - f[ j    * procCoords.x_cells_num + i]) / hy
-                        ) / hy;
+                            (f[j * procCoords.x_cells_num + i  ] - recv_message_lr [0] ) -
+                            (f[j * procCoords.x_cells_num + i+1] - f[j * procCoords.x_cells_num + i  ])
+                        ) / hx2 + (
+                            (f[ j    * procCoords.x_cells_num + i] - recv_message_td [0]                  ) -
+                            (f[(j+1) * procCoords.x_cells_num + i] - f[ j    * procCoords.x_cells_num + i])
+                        ) / hy2;
                 }
             }
 
@@ -763,12 +768,12 @@ void DHP_PE_RA_FDM::Counting_5_star (double* const delta_f, const double* const 
                 i = procCoords.x_cells_num -1;
                 if (not procCoords.top and not procCoords.right){
                     delta_f[j * procCoords.x_cells_num + i] = (
-                            (f[j * procCoords.x_cells_num + i  ] - f[j * procCoords.x_cells_num + i-1]) / hx -
-                            (recv_message_rl [0]                 - f[j * procCoords.x_cells_num + i  ]) / hx
-                        ) / hx + (
-                            (f[ j    * procCoords.x_cells_num + i] - recv_message_td [procCoords.x_cells_num -1] ) / hy -
-                            (f[(j+1) * procCoords.x_cells_num + i] - f[ j    * procCoords.x_cells_num + i]) / hy
-                        ) / hy;
+                            (f[j * procCoords.x_cells_num + i  ] - f[j * procCoords.x_cells_num + i-1]) -
+                            (recv_message_rl [0]                 - f[j * procCoords.x_cells_num + i  ])
+                        ) / hx2 + (
+                            (f[ j    * procCoords.x_cells_num + i] - recv_message_td [procCoords.x_cells_num -1]) -
+                            (f[(j+1) * procCoords.x_cells_num + i] - f[ j    * procCoords.x_cells_num + i])
+                        ) / hy2;
                 }
             }
 
@@ -778,12 +783,12 @@ void DHP_PE_RA_FDM::Counting_5_star (double* const delta_f, const double* const 
                 i = 0;
                 if (not procCoords.bottom and not procCoords.left){
                     delta_f[j * procCoords.x_cells_num + i] = (
-                            (f[j * procCoords.x_cells_num + i  ] - recv_message_lr[procCoords.y_cells_num -1] ) / hx -
-                            (f[j * procCoords.x_cells_num + i+1] - f[j * procCoords.x_cells_num + i  ]) / hx
-                        ) / hx + (
-                            (f[ j    * procCoords.x_cells_num + i] - f[(j-1) * procCoords.x_cells_num + i]) / hy -
-                            (recv_message_bu [0]                   - f[ j    * procCoords.x_cells_num + i]) / hy
-                        ) / hy;
+                            (f[j * procCoords.x_cells_num + i  ] - recv_message_lr[procCoords.y_cells_num -1] ) -
+                            (f[j * procCoords.x_cells_num + i+1] - f[j * procCoords.x_cells_num + i  ])
+                        ) / hx2 + (
+                            (f[ j    * procCoords.x_cells_num + i] - f[(j-1) * procCoords.x_cells_num + i]) -
+                            (recv_message_bu [0]                   - f[ j    * procCoords.x_cells_num + i])
+                        ) / hy2;
                 }
             }
 
@@ -793,12 +798,12 @@ void DHP_PE_RA_FDM::Counting_5_star (double* const delta_f, const double* const 
                 i = procCoords.x_cells_num -1;
                 if (not procCoords.bottom and not procCoords.right){
                     delta_f[j * procCoords.x_cells_num + i] = (
-                            (f[j * procCoords.x_cells_num + i  ] - f[j * procCoords.x_cells_num + i-1]) / hx -
-                            (recv_message_rl [procCoords.y_cells_num -1] - f[j * procCoords.x_cells_num + i  ]) / hx
-                        ) / hx + (
-                            (f[ j    * procCoords.x_cells_num + i] - f[(j-1) * procCoords.x_cells_num + i]) / hy -
-                            (recv_message_bu [procCoords.x_cells_num -1] - f[ j    * procCoords.x_cells_num + i]) / hy
-                        ) / hy;
+                            (f[j * procCoords.x_cells_num + i  ] - f[j * procCoords.x_cells_num + i-1]) -
+                            (recv_message_rl [procCoords.y_cells_num -1] - f[j * procCoords.x_cells_num + i  ])
+                        ) / hx2 + (
+                            (f[ j    * procCoords.x_cells_num + i] - f[(j-1) * procCoords.x_cells_num + i]) -
+                            (recv_message_bu [procCoords.x_cells_num -1] - f[ j    * procCoords.x_cells_num + i])
+                        ) / hy2;
                 }
             }
         } // #pragma omp sections
@@ -814,12 +819,12 @@ void DHP_PE_RA_FDM::Counting_5_star (double* const delta_f, const double* const 
             #pragma omp for schedule (static)
             for (i = 1; i < procCoords.x_cells_num -1; i++){
                 delta_f[j * procCoords.x_cells_num + i] = (
-                        (f[j * procCoords.x_cells_num + i  ] - f[j * procCoords.x_cells_num + i-1]) / hx -
-                        (f[j * procCoords.x_cells_num + i+1] - f[j * procCoords.x_cells_num + i  ]) / hx
-                    ) / hx + (
-                        (f[ j    * procCoords.x_cells_num + i] - recv_message_td[i]               ) / hy -
-                        (recv_message_bu[i]                    - f[j * procCoords.x_cells_num + i]) / hy
-                    ) / hy;
+                        (f[j * procCoords.x_cells_num + i  ] - f[j * procCoords.x_cells_num + i-1]) -
+                        (f[j * procCoords.x_cells_num + i+1] - f[j * procCoords.x_cells_num + i  ])
+                    ) / hx2 + (
+                        (f[ j    * procCoords.x_cells_num + i] - recv_message_td[i]               ) -
+                        (recv_message_bu[i]                    - f[j * procCoords.x_cells_num + i])
+                    ) / hy2;
             }
         }
 
@@ -836,12 +841,12 @@ void DHP_PE_RA_FDM::Counting_5_star (double* const delta_f, const double* const 
                 i = 0;
                 if (not procCoords.top and not procCoords.bottom and not procCoords.left) {
                     delta_f[j * procCoords.x_cells_num + i] = (
-                            (f[j * procCoords.x_cells_num + i  ] - recv_message_lr [0] ) / hx -
-                            (f[j * procCoords.x_cells_num + i+1] - f[j * procCoords.x_cells_num + i  ]) / hx
-                        ) / hx + (
-                            (f[ j    * procCoords.x_cells_num + i] - recv_message_td [0]                  ) / hy -
-                            (recv_message_bu[0]                    - f[ j    * procCoords.x_cells_num + i]) / hy
-                        ) / hy;
+                            (f[j * procCoords.x_cells_num + i  ] - recv_message_lr [0] ) -
+                            (f[j * procCoords.x_cells_num + i+1] - f[j * procCoords.x_cells_num + i  ])
+                        ) / hx2 + (
+                            (f[ j    * procCoords.x_cells_num + i] - recv_message_td [0]                  ) -
+                            (recv_message_bu[0]                    - f[ j    * procCoords.x_cells_num + i])
+                        ) / hy2;
                 }
             }
 
@@ -851,12 +856,12 @@ void DHP_PE_RA_FDM::Counting_5_star (double* const delta_f, const double* const 
                 i = procCoords.x_cells_num -1;
                 if (not procCoords.top and not procCoords.bottom and not procCoords.right){
                     delta_f[j * procCoords.x_cells_num + i] = (
-                            (f[j * procCoords.x_cells_num + i  ] - f[j * procCoords.x_cells_num + i-1]) / hx -
-                            (recv_message_rl [0]                 - f[j * procCoords.x_cells_num + i  ]) / hx
-                        ) / hx + (
-                            (f[ j    * procCoords.x_cells_num + i] - recv_message_td [procCoords.x_cells_num -1] ) / hy -
-                            (recv_message_bu [procCoords.x_cells_num -1] - f[ j    * procCoords.x_cells_num + i]) / hy
-                        ) / hy;
+                            (f[j * procCoords.x_cells_num + i  ] - f[j * procCoords.x_cells_num + i-1]) -
+                            (recv_message_rl [0]                 - f[j * procCoords.x_cells_num + i  ])
+                        ) / hx2 + (
+                            (f[ j    * procCoords.x_cells_num + i] - recv_message_td [procCoords.x_cells_num -1]) -
+                            (recv_message_bu [procCoords.x_cells_num -1] - f[ j    * procCoords.x_cells_num + i])
+                        ) / hy2;
                 }
             }
         } // #pragma omp sections
@@ -872,12 +877,12 @@ void DHP_PE_RA_FDM::Counting_5_star (double* const delta_f, const double* const 
             #pragma omp for schedule (static)
             for (j = 1; j < procCoords.y_cells_num -1; j++){
                 delta_f[j * procCoords.x_cells_num + i] = (
-                        (f[j * procCoords.x_cells_num + i  ] - recv_message_lr[j]               ) / hx -
-                        (recv_message_rl[j]                  - f[j * procCoords.x_cells_num + i]) / hx
-                    ) / hx + (
-                        (f[ j    * procCoords.x_cells_num + i] - f[(j-1) * procCoords.x_cells_num + i]) / hy -
-                        (f[(j+1) * procCoords.x_cells_num + i] - f[ j    * procCoords.x_cells_num + i]) / hy
-                    ) / hy;
+                        (f[j * procCoords.x_cells_num + i  ] - recv_message_lr[j]               ) -
+                        (recv_message_rl[j]                  - f[j * procCoords.x_cells_num + i])
+                    ) / hx2 + (
+                        (f[ j    * procCoords.x_cells_num + i] - f[(j-1) * procCoords.x_cells_num + i]) -
+                        (f[(j+1) * procCoords.x_cells_num + i] - f[ j    * procCoords.x_cells_num + i])
+                    ) / hy2;
             }
         }
 
@@ -894,12 +899,12 @@ void DHP_PE_RA_FDM::Counting_5_star (double* const delta_f, const double* const 
                 i = 0;
                 if (not procCoords.left and not procCoords.right and not procCoords.top) {
                     delta_f[j * procCoords.x_cells_num + i] = (
-                            (f[j * procCoords.x_cells_num + i  ] - recv_message_lr [0]                ) / hx -
-                            (recv_message_rl[0]                  - f[j * procCoords.x_cells_num + i  ]) / hx
-                        ) / hx + (
-                            (f[ j    * procCoords.x_cells_num + i] - recv_message_td [0]                  ) / hy -
-                            (f[(j+1) * procCoords.x_cells_num + i] - f[ j    * procCoords.x_cells_num + i]) / hy
-                        ) / hy;
+                            (f[j * procCoords.x_cells_num + i  ] - recv_message_lr [0]                ) -
+                            (recv_message_rl[0]                  - f[j * procCoords.x_cells_num + i  ])
+                        ) / hx2 + (
+                            (f[ j    * procCoords.x_cells_num + i] - recv_message_td [0]                  ) -
+                            (f[(j+1) * procCoords.x_cells_num + i] - f[ j    * procCoords.x_cells_num + i])
+                        ) / hy2;
                 }
             }
 
@@ -909,12 +914,12 @@ void DHP_PE_RA_FDM::Counting_5_star (double* const delta_f, const double* const 
                 i = 0;
                 if (not procCoords.left and not procCoords.right and not procCoords.bottom){
                     delta_f[j * procCoords.x_cells_num + i] = (
-                            (f[j * procCoords.x_cells_num + i  ] - recv_message_lr[j]                   ) / hx -
-                            (recv_message_rl[j]                  - f[j * procCoords.x_cells_num + i  ]  ) / hx
-                        ) / hx + (
-                            (f[ j    * procCoords.x_cells_num + i] - f[(j-1) * procCoords.x_cells_num + i]) / hy -
-                            (recv_message_bu [0]                   - f[ j    * procCoords.x_cells_num + i]) / hy
-                        ) / hy;
+                            (f[j * procCoords.x_cells_num + i  ] - recv_message_lr[j]                   ) -
+                            (recv_message_rl[j]                  - f[j * procCoords.x_cells_num + i  ]  )
+                        ) / hx2 + (
+                            (f[ j    * procCoords.x_cells_num + i] - f[(j-1) * procCoords.x_cells_num + i]) -
+                            (recv_message_bu [0]                   - f[ j    * procCoords.x_cells_num + i])
+                        ) / hy2;
                 }
             }
         } // #pragma omp sections
@@ -926,12 +931,12 @@ void DHP_PE_RA_FDM::Counting_5_star (double* const delta_f, const double* const 
         j = 0;
         if (not procCoords.left and not procCoords.right and not procCoords.top and not procCoords.bottom){
             delta_f[j * procCoords.x_cells_num + i] = (
-                    (f[j * procCoords.x_cells_num + i  ] - recv_message_lr[j]                   ) / hx -
-                    (recv_message_rl[j]                  - f[j * procCoords.x_cells_num + i  ]  ) / hx
-                ) / hx + (
-                    (f[ j    * procCoords.x_cells_num + i] - recv_message_td[0]                   ) / hy -
-                    (recv_message_bu [0]                   - f[ j    * procCoords.x_cells_num + i]) / hy
-                ) / hy;
+                    (f[j * procCoords.x_cells_num + i  ] - recv_message_lr[j]                   ) -
+                    (recv_message_rl[j]                  - f[j * procCoords.x_cells_num + i  ]  )
+                ) / hx2 + (
+                    (f[ j    * procCoords.x_cells_num + i] - recv_message_td[0]                   ) -
+                    (recv_message_bu [0]                   - f[ j    * procCoords.x_cells_num + i])
+                ) / hy2;
         }
     }
 

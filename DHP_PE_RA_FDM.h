@@ -157,6 +157,12 @@ class DHP_PE_RA_FDM {
     void Compute_p (const double tau, const double* const g);
 
 
+    // Precomputed variables for speedup
+    double hxhy;
+    double hx2;
+    double hy2;
+
+
     ProcParams procParams;
     ProcComputingCoords procCoords;
     int descent_step_iterations;
