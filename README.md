@@ -113,13 +113,6 @@ surfaceAlignment= 512
 Lomonosov execute tasks in context of `~/_scratch` directory.
 
 ```
-sbatch -p gputest -n 1 --ntasks-per-node=2 --time=0-00:15:00 impi ./superPrac2 5 0.001 output
-sbatch -p gputest -n 4 --ntasks-per-node=2 --time=0-00:15:00 impi ./superPrac2 1000 0.0001 output
-
-
-
-
-
 sbatch -p gputest -n 1 --ntasks-per-node=2 --time=0-00:01:00 impi ./superPrac2 1000 0.0001 output/lom-out-1-1000 # 00:07 sec
 sbatch -p gputest -n 1 --ntasks-per-node=2 --time=0-00:15:00 impi ./superPrac2 2000 0.0001 output/lom-out-1-2000 # 00:56 sec
 
@@ -134,6 +127,4 @@ sbatch -p gpu -n 64 --ntasks-per-node=2 --time=0-00:01:00 impi ./superPrac2 1000
 sbatch -p gpu -n 64 --ntasks-per-node=2 --time=0-00:01:00 impi ./superPrac2 2000 0.0001 output/lom-out-64-2000 #
 sbatch -p gpu -n 128 --ntasks-per-node=2 --time=0-00:01:00 impi ./superPrac2 1000 0.0001 output/lom-out-128-1000 #
 sbatch -p gpu -n 128 --ntasks-per-node=2 --time=0-00:01:00 impi ./superPrac2 2000 0.0001 output/lom-out-128-2000 #
-
-
 ```
