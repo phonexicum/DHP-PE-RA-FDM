@@ -50,21 +50,21 @@ with open(target_dir + ".dat", "w") as gnuplot_file:
             prev_value_p = value["x"]
             gnuplot_file.write("\n")
 
-        if value["x"] > 0.0 and value["y"] > 0.0:
+        # if value["x"] > 0.0 and value["y"] > 0.0:
 
-            # Real value
-            val = value["u"]
-            #
-            # Absolute error
-            # val = value["u"] - math.log(1 + value['x'] * value['y'])
-            #
-            # Relative error
-            # val = abs(value["u"] - math.log(1 + value['x'] * value['y'])) / value["u"]
+        # Real value
+        val = value["u"]
+        #
+        # Absolute error
+        # val = value["u"] - math.log(1 + value['x'] * value['y'])
+        #
+        # Relative error
+        # val = abs(value["u"] - math.log(1 + value['x'] * value['y'])) / value["u"]
 
-            maximum = max(maximum, val)
-            minimum = min(minimum, val)
+        maximum = max(maximum, val)
+        minimum = min(minimum, val)
 
-            gnuplot_file.write(str(value["x"]) + " " + str(value["y"]) + " " + str(val) + "\n")
+        gnuplot_file.write(str(value["x"]) + " " + str(value["y"]) + " " + str(val) + "\n")
 
 print ""
 print maximum

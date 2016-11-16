@@ -422,7 +422,7 @@ void DHP_PE_RA_FDM::cuda_Counting_5_star (double* const delta_f, const double* c
     // initialize send buffers
     // ==========================================
 
-    mesh = GridDistribute (devProp, procCoords.y_cells_num);
+    GridDistribute mesh (devProp, procCoords.y_cells_num);
 
     // left -> right
     cudakernel_Counting_5_star_Memcpy_vertical_message<<<mesh.gridDim, mesh.blockDim, 0, cudaStreams[1]>>> (
@@ -447,7 +447,7 @@ void DHP_PE_RA_FDM::cuda_Counting_5_star (double* const delta_f, const double* c
 
     // This kernel will take a lot of time. Asynchronous read/writes in 'initialize send buffers' area - must be started first.
     int dimension = (procCoords.x_cells_num -2) * (procCoords.y_cells_num -2);
-    GridDistribute mesh (devProp, dimension);
+    mesh = GridDistribute (devProp, dimension);
     cudakernel_Counting_5_star_insides<<<mesh.gridDim, mesh.blockDim, 0, cudaStreams[0]>>> (delta_f, f, procCoords, hx2, hy2); CUDA_CHECK_LAST_ERROR;
 
     // ==========================================

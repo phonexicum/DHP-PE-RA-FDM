@@ -12,11 +12,11 @@ set terminal wxt size 1000,600 font ',14'
 
 # ============================================================================= VIEW
 # View for function value
-#set view 60,13
+set view 60,13
 
 # View for absolute error
 #set view 53, 287
-set view 50, 225
+#set view 50, 225
 
 # View for relative error
 #set view 50, 280
