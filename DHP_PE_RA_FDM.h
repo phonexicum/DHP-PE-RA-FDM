@@ -183,6 +183,8 @@ class DHP_PE_RA_FDM {
     void cuda_Compute_g (double* const g, const double* const r, const double alpha) const;
     void cuda_Compute_p (const double tau, const double* const g);
 
+    // // Debug function only ! Adapted for one process only !
+    // void OutputBias (const double* const f);
 
     ProcParams procParams;
     ProcComputingCoords procCoords;
@@ -222,5 +224,6 @@ class DHP_PE_RA_FDM {
     };
 
     static const bool debug = false;
+    // static const bool countBias = true;
     string debug_fname;
 };

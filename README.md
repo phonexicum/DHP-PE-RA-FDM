@@ -51,7 +51,7 @@ Example:
 - `./*.h`, `./*.cpp` and `./*.cu` - C++ and CUDA realization of DHP_PE_RA_FDM
 
 - `./generate_gnuplot.py` - generates `./*.dat` files for their plotting
-- `./gnuplot.script` - gnuplot script which generates plots
+- `./gnuplot.plt` - gnuplot script which generates plots
 
 - `./algorithm/` - problem formulation (*russian only*) (contains calculating formules) and scheme of numerical method
 - `./loutput/` - directories contain some results of running benchmark under Lomonosov supercomputers

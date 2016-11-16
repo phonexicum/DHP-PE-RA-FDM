@@ -381,6 +381,7 @@ void DHP_PE_RA_FDM::Compute (const ProcParams& procParams_in, const int x_proc_n
         cuda_Compute_p (tau, g);
         Dump_func(debug_fname, p, "p");
 
+        // OutputBias (p_prev);
         if (cuda_StopCriteria (p, p_prev))
             break;
 
@@ -488,3 +489,40 @@ void ProcComputingCoords::Dump(const string& fout_name) const{
 
     fout.close();
 }
+
+
+// ==================================================================================================================================================
+//                                                                                                                          DHP_PE_RA_FDM::OutputBias
+// ==================================================================================================================================================
+// void DHP_PE_RA_FDM::OutputBias (const double* const f){
+//     // This is DEBUG function only!
+
+//     #define FI(x, y) (std::log(1 + x*y))
+
+//     if (countBias){
+
+//         double* p_dist = new double [procCoords.x_cells_num * procCoords.y_cells_num];
+
+//         SAFE_CUDA(cudaMemcpy(p_dist, f, procCoords.x_cells_num * procCoords.y_cells_num * sizeof(*f), cudaMemcpyDeviceToHost));
+
+//         double bias = 0;
+//         for (int j = 0; j < procCoords.y_cells_num; j++)
+//             for (int i = 0; i < procCoords.x_cells_num; i++){
+//                 double val = p_dist[j * procCoords.x_cells_num + i] -
+//                     FI(X1 + (procCoords.x_cell_pos + i) * hx, Y1 + (procCoords.y_cell_pos + j) * hy);
+//                 bias += val * val * hxhy;
+//             }
+
+//         bias = std::sqrt(bias);
+
+//         fstream fout ("bias.dat", fstream::out | fstream::app);
+        
+//         if (procParams.rank == 0)
+//             // cout << "it= " << iterations_counter << " bias= " << bias << endl;
+//             fout << iterations_counter << " " << bias << endl;
+
+//         fout.close();
+
+//         delete [] p_dist;
+//     }
+// }

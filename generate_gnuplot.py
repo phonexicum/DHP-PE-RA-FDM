@@ -3,6 +3,7 @@
 import sys
 from os import listdir, path
 import json
+import math
 
 if len(sys.argv) < 2:
     print ("Usage: ./generate_gnuplot.py output_dir")
@@ -37,6 +38,9 @@ def srtFunc(x, y):
 data.sort(cmp=srtFunc, reverse=False)
 # sorted(data, key=itemgetter("x", "y"))
 
+maximum = 0.0
+minimum = 1000000000.0
+
 with open(target_dir + ".dat", "w") as gnuplot_file:
     gnuplot_file.write("# x y u\n")
 
@@ -46,4 +50,22 @@ with open(target_dir + ".dat", "w") as gnuplot_file:
             prev_value_p = value["x"]
             gnuplot_file.write("\n")
 
-        gnuplot_file.write(str(value["x"]) + " " + str(value["y"]) + " " + str(value["u"]) + "\n")
+        if value["x"] > 0.0 and value["y"] > 0.0:
+
+            # Real value
+            val = value["u"]
+            #
+            # Absolute error
+            # val = value["u"] - math.log(1 + value['x'] * value['y'])
+            #
+            # Relative error
+            # val = abs(value["u"] - math.log(1 + value['x'] * value['y'])) / value["u"]
+
+            maximum = max(maximum, val)
+            minimum = min(minimum, val)
+
+            gnuplot_file.write(str(value["x"]) + " " + str(value["y"]) + " " + str(val) + "\n")
+
+print ""
+print maximum
+print minimum
