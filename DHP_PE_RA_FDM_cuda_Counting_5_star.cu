@@ -397,10 +397,6 @@ void DHP_PE_RA_FDM::cuda_Counting_5_star (double* const delta_f, const double* c
 
     int ret = MPI_SUCCESS;
 
-    int dimension = (procCoords.x_cells_num -2) * (procCoords.y_cells_num -2);
-    GridDistribute mesh (devProp, dimension);
-    cudakernel_Counting_5_star_insides<<<mesh.gridDim, mesh.blockDim, 0, cudaStreams[0]>>> (delta_f, f, procCoords, hx2, hy2); CUDA_CHECK_LAST_ERROR;
-
     // ==========================================
     // memory allocation
     // ==========================================
@@ -444,6 +440,15 @@ void DHP_PE_RA_FDM::cuda_Counting_5_star (double* const delta_f, const double* c
 
     int send_amount = 0;
     int recv_amount = 0;
+
+    // ==========================================
+    // Compute internal area
+    // ==========================================
+
+    // This kernel will take a lot of time. Asynchronous read/writes in 'initialize send buffers' area - must be started first.
+    int dimension = (procCoords.x_cells_num -2) * (procCoords.y_cells_num -2);
+    GridDistribute mesh (devProp, dimension);
+    cudakernel_Counting_5_star_insides<<<mesh.gridDim, mesh.blockDim, 0, cudaStreams[0]>>> (delta_f, f, procCoords, hx2, hy2); CUDA_CHECK_LAST_ERROR;
 
     // ==========================================
     // send messages
