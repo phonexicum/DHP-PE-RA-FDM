@@ -50,7 +50,7 @@ Example:
 - `./DHP_PE_RA_FDM.h` and `./DHP_PE_RA_FDM.cpp` - C++ DHP_PE_RA_FDM realization
 
 - `./generate_gnuplot.py` - generates `./*.dat` files for their plotting
-- `./gnuplot.script` - gnuplot script which generates plots
+- `./gnuplot.plt` - gnuplot script which generates plots
 
 - `./algorithm/` - problem formulation (*russian only*) (contains calculating formules) and scheme of numerical method
 - `./joutput/` and `./loutput/` - directories contain some results of running benchmark under BlueGene/P and Lomonosov supercomputers
@@ -61,19 +61,26 @@ Example:
 
 ```
 mpisubmit.bg -n 1 -m smp -w 02:00:00 -t PREFER_TORUS ./superPrac2 1000 0.0001 output/bgp-out-1-1000 # 50:15 sec
-mpisubmit.bg -n 1 -m smp -w 02:00:00 -t PREFER_TORUS ./superPrac2 2000 0.0001 output/bgp-out-1-2000
+mpisubmit.bg -n 1 -m smp -w 02:00:00 -t PREFER_TORUS ./superPrac2 2000 0.0001 output/bgp-out-1-2000 # --:--
+mpisubmit.bg -n 1 -m smp -env OMP_NUM_THREADS=3 -w 02:00:00 -t PREFER_TORUS ./superPrac2-omp 1000 0.0001 output/bgp-out-1-1000-omp # 04:22
+mpisubmit.bg -n 1 -m smp -env OMP_NUM_THREADS=3 -w 02:00:00 -t PREFER_TORUS ./superPrac2-omp 2000 0.0001 output/bgp-out-1-2000-omp # 35:37
+
+mpisubmit.bg -n 2 -m smp -w 01:00:00 -t PREFER_TORUS ./superPrac2 1000 0.0001 output/bgp-out-2-1000 # 21:37 sec
+mpisubmit.bg -n 2 -m smp -w 02:00:00 -t PREFER_TORUS ./superPrac2 2000 0.0001 output/bgp-out-2-2000 # --:--
+mpisubmit.bg -n 2 -m smp -env OMP_NUM_THREADS=3 -w 01:00:00 -t PREFER_TORUS ./superPrac2-omp 1000 0.0001 output/bgp-out-2-1000-omp # 02:12
+mpisubmit.bg -n 2 -m smp -env OMP_NUM_THREADS=3 -w 01:00:00 -t PREFER_TORUS ./superPrac2-omp 2000 0.0001 output/bgp-out-2-2000-omp # 17:50
 
 mpisubmit.bg -n 128 -m smp -w 00:02:00 -t PREFER_TORUS ./superPrac2 1000 0.0001 output/bgp-out-128-1000 # 0:24 sec
 mpisubmit.bg -n 128 -m smp -w 00:05:00 -t PREFER_TORUS ./superPrac2 2000 0.0001 output/bgp-out-128-2000 # 3:10 sec
-mpisubmit.bg -n 128 -m smp -env OMP_NUM_THREADS=3 -w 00:01:00 -t PREFER_TORUS ./superPrac2-omp 1000 0.0001 output/bgp-out-128-1000-omp # 0:4 sec
+mpisubmit.bg -n 128 -m smp -env OMP_NUM_THREADS=3 -w 00:01:00 -t PREFER_TORUS ./superPrac2-omp 1000 0.0001 output/bgp-out-128-1000-omp # 0:04 sec
 mpisubmit.bg -n 128 -m smp -env OMP_NUM_THREADS=3 -w 00:01:00 -t PREFER_TORUS ./superPrac2-omp 2000 0.0001 output/bgp-out-128-2000-omp # 0:31 sec
 
 mpisubmit.bg -n 256 -m smp -w 00:01:00 -t PREFER_TORUS ./superPrac2 1000 0.0001 output/bgp-out-256-1000 # 0:12 sec
 mpisubmit.bg -n 256 -m smp -w 00:03:00 -t PREFER_TORUS ./superPrac2 2000 0.0001 output/bgp-out-256-2000 # 1:35 sec
-mpisubmit.bg -n 256 -m smp -env OMP_NUM_THREADS=3 -w 00:00:30 -t PREFER_TORUS ./superPrac2-omp 1000 0.0001 output/bgp-out-256-1000-omp # 0:3 sec
+mpisubmit.bg -n 256 -m smp -env OMP_NUM_THREADS=3 -w 00:00:30 -t PREFER_TORUS ./superPrac2-omp 1000 0.0001 output/bgp-out-256-1000-omp # 0:03 sec
 mpisubmit.bg -n 256 -m smp -env OMP_NUM_THREADS=3 -w 00:01:00 -t PREFER_TORUS ./superPrac2-omp 2000 0.0001 output/bgp-out-256-2000-omp # 0:16 sec
 
-mpisubmit.bg -n 512 -m smp -w 00:00:30 -t PREFER_TORUS ./superPrac2 1000 0.0001 output/bgp-out-512-1000 # 0:6 sec
+mpisubmit.bg -n 512 -m smp -w 00:00:30 -t PREFER_TORUS ./superPrac2 1000 0.0001 output/bgp-out-512-1000 # 0:06 sec
 mpisubmit.bg -n 512 -m smp -w 00:03:00 -t PREFER_TORUS ./superPrac2 2000 0.0001 output/bgp-out-512-2000 # 1:48 sec
 mpisubmit.bg -n 512 -m smp -env OMP_NUM_THREADS=3 -w 00:00:30 -t PREFER_TORUS ./superPrac2-omp 1000 0.0001 output/bgp-out-512-1000-omp # 0:2 sec
 mpisubmit.bg -n 512 -m smp -env OMP_NUM_THREADS=3 -w 00:01:00 -t PREFER_TORUS ./superPrac2-omp 2000 0.0001 output/bgp-out-512-2000-omp # 0:9 sec

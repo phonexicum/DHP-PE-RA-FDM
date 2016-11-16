@@ -341,6 +341,8 @@ void DHP_PE_RA_FDM::Compute (const ProcParams& procParams_in, const int x_proc_n
         Compute_p (tau, g);
         Dump_func(debug_fname, p, "p");
 
+        OutputBias (p);
+
         if (StopCriteria (p, p_prev))
             break;
 
@@ -1192,4 +1194,36 @@ void ProcComputingCoords::Dump(const string& fout_name) const{
         << "top= " << top << " bottom= " << bottom << " left= " << left << " right= " << right << endl;
 
     fout.close();
+}
+
+
+// ==================================================================================================================================================
+//                                                                                                                          DHP_PE_RA_FDM::OutputBias
+// ==================================================================================================================================================
+void DHP_PE_RA_FDM::OutputBias (const double* const f){
+
+    if (countBias){
+
+        double* p_dist = new double [procCoords.x_cells_num * procCoords.y_cells_num];
+
+        #pragma omp parallel
+        // #pragma omp for schedule (static) collapse (2)
+        #pragma omp for schedule (static)
+        for (int j = 0; j < procCoords.y_cells_num; j++)
+            for (int i = 0; i < procCoords.x_cells_num; i++)
+                p_dist[j * procCoords.x_cells_num + i] = f[j * procCoords.x_cells_num + i] -
+                    fi(X1 + (procCoords.x_cell_pos + i) * hx, Y1 + (procCoords.y_cell_pos + j) * hy);
+
+        double bias = std::sqrt(ComputingScalarProduct(p_dist, p_dist));
+
+        fstream fout ("bias.dat", fstream::out | fstream::app);
+        
+        if (procParams.rank == 0)
+            // cout << "it= " << iterations_counter << " bias= " << bias << endl;
+            fout << iterations_counter << " " << bias << endl;
+
+        fout.close();
+
+        delete [] p_dist;
+    }
 }

@@ -10,7 +10,7 @@ superPrac2-omp: main.cpp DHP_PE_RA_FDM.cpp DHP_PE_RA_FDM.h
 	mkdir -p output
 
 
-.PHONY: clean graph lmount jmount lcompile jcompile jcompile-omp jprepare lprepare upload
+.PHONY: clean lmount jmount lcompile jcompile jcompile-omp jprepare lprepare upload
 
 
 run:
@@ -19,12 +19,8 @@ run:
 omprun:
 	mpirun -np 2 -env OMP_NUM_THREADS=2 ./superPrac2-omp 100 0.0001 output
 
-graph:
-	./generate_gnuplot.py output
-	./gnuplot.script
-
 clean:
-	rm -f -R superPrac2 superPrac2-omp output* debug.txt
+	rm -f -R superPrac2 superPrac2-omp output* debug.txt bias.dat
 
 
 
@@ -59,19 +55,27 @@ MSOURCES=$(SOURCES:%=mount/%)
 mount/Makefile: Makefile
 	cp Makefile ./mount/
 
+mount/gnuplot.plt: gnuplot.plt
+	cp gnuplot.plt ./mount/gnuplot.plt
+
+mount/generate_gnuplot.py: generate_gnuplot.py
+	cp generate_gnuplot.py ./mount/generate_gnuplot.py
+
 mount/%.h: %.h
 	cp $(@F) ./mount/
 
 mount/%.cpp: %.cpp
 	cp $(@F) ./mount/
 
-upload: $(MINCLUDES) $(MSOURCES) mount/Makefile
+upload: $(MINCLUDES) $(MSOURCES) mount/Makefile mount/generate_gnuplot.py mount/gnuplot.plt
 
 
 
 jprepare:
 	mkdir -p ./output/bgp-out-1-1000
 	mkdir -p ./output/bgp-out-1-2000
+	mkdir -p ./output/bgp-out-2-1000
+	mkdir -p ./output/bgp-out-2-2000
 
 	mkdir -p ./output/bgp-out-128-1000
 	mkdir -p ./output/bgp-out-256-1000
@@ -80,6 +84,11 @@ jprepare:
 	mkdir -p ./output/bgp-out-128-2000
 	mkdir -p ./output/bgp-out-256-2000
 	mkdir -p ./output/bgp-out-512-2000
+
+	mkdir -p ./output/bgp-out-1-1000-omp
+	mkdir -p ./output/bgp-out-1-2000-omp
+	mkdir -p ./output/bgp-out-2-1000-omp
+	mkdir -p ./output/bgp-out-2-2000-omp
 
 	mkdir -p ./output/bgp-out-128-1000-omp
 	mkdir -p ./output/bgp-out-256-1000-omp
@@ -92,6 +101,8 @@ jprepare:
 lprepare:
 	mkdir -p ~/_scratch/output/lom-out-1-1000
 	mkdir -p ~/_scratch/output/lom-out-1-2000
+	mkdir -p ~/_scratch/output/lom-out-2-1000
+	mkdir -p ~/_scratch/output/lom-out-2-2000
 
 	mkdir -p ~/_scratch/output/lom-out-8-1000
 	mkdir -p ~/_scratch/output/lom-out-16-1000
