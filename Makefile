@@ -35,15 +35,15 @@ lmount:
 
 
 jcompile:
-	mpicxx main.cpp DHP_PE_RA_FDM.cpp DHP_PE_RA_FDM.h -o superPrac2 -std=gnu++98 -Wall -Wno-unknown-pragmas
+	mpicxx main.cpp DHP_PE_RA_FDM.cpp DHP_PE_RA_FDM.h -o superPrac2 -std=gnu++98 -Wall -Wno-unknown-pragmas -O3
 
 jcompile-omp:
-	mpixlcxx_r main.cpp DHP_PE_RA_FDM.cpp -o superPrac2-omp -qsmp=omp
+	mpixlcxx_r main.cpp DHP_PE_RA_FDM.cpp -o superPrac2-omp -qsmp=omp -O3
 
 # module add slurm/15.08
 # module add impi/5.0.1
 lcompile:
-	mpicxx main.cpp DHP_PE_RA_FDM.cpp DHP_PE_RA_FDM.h -o superPrac2 -std=c++0x -Wall -Wno-unknown-pragmas
+	mpicxx main.cpp DHP_PE_RA_FDM.cpp DHP_PE_RA_FDM.h -o superPrac2 -std=c++0x -Wall -Wno-unknown-pragmas -O3
 
 	cp ./superPrac2 ~/_scratch/superPrac2
 
