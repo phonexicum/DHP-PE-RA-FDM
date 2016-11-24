@@ -113,16 +113,57 @@ surfaceAlignment= 512
 Lomonosov execute tasks in context of `~/_scratch` directory.
 
 ```
+sbatch -p gputest -n 1 --time=0-00:00:15 impi nvprof --query-events
+
+
+
+export COMPUTE_PROFILE=1
+export COMPUTE_PROFILE_CONFIG=profiler.config
+sbatch -p gputest -n 1 --ntasks-per-node=2 --time=0-00:01:00 impi ./superPrac2-cuda 5000 0.0001 /dev/null
+
+
+
 sbatch -p gputest -n 1 --ntasks-per-node=2 --time=0-00:01:00 impi ./superPrac2-cuda 1000 0.0001 output/lom-out-1-1000 # 00:07 sec
+sbatch -p gputest -n 2 --ntasks-per-node=2 --time=0-00:01:00 impi ./superPrac2-cuda 1000 0.0001 /dev/null
+sbatch -p gputest -n 3 --ntasks-per-node=2 --time=0-00:01:00 impi ./superPrac2-cuda 1000 0.0001 /dev/null
+sbatch -p gputest -n 4 --ntasks-per-node=2 --time=0-00:01:00 impi ./superPrac2-cuda 1000 0.0001 /dev/null
+sbatch -p gputest -n 5 --ntasks-per-node=2 --time=0-00:01:00 impi ./superPrac2-cuda 1000 0.0001 /dev/null
+sbatch -p gputest -n 6 --ntasks-per-node=2 --time=0-00:01:00 impi ./superPrac2-cuda 1000 0.0001 /dev/null
+sbatch -p gputest -n 7 --ntasks-per-node=2 --time=0-00:01:00 impi ./superPrac2-cuda 1000 0.0001 /dev/null
+sbatch -p gputest -n 8 --ntasks-per-node=2 --time=0-00:01:00 impi ./superPrac2-cuda 1000 0.0001 /dev/null
+
 sbatch -p gputest -n 1 --ntasks-per-node=2 --time=0-00:15:00 impi ./superPrac2-cuda 2000 0.0001 output/lom-out-1-2000 # 00:56 sec
+sbatch -p gputest -n 2 --ntasks-per-node=2 --time=0-00:15:00 impi ./superPrac2-cuda 2000 0.0001 /dev/null
+sbatch -p gputest -n 3 --ntasks-per-node=2 --time=0-00:15:00 impi ./superPrac2-cuda 2000 0.0001 /dev/null
+sbatch -p gputest -n 4 --ntasks-per-node=2 --time=0-00:15:00 impi ./superPrac2-cuda 2000 0.0001 /dev/null
+sbatch -p gputest -n 5 --ntasks-per-node=2 --time=0-00:15:00 impi ./superPrac2-cuda 2000 0.0001 /dev/null
+sbatch -p gputest -n 6 --ntasks-per-node=2 --time=0-00:15:00 impi ./superPrac2-cuda 2000 0.0001 /dev/null
+sbatch -p gputest -n 7 --ntasks-per-node=2 --time=0-00:15:00 impi ./superPrac2-cuda 2000 0.0001 /dev/null
+sbatch -p gputest -n 8 --ntasks-per-node=2 --time=0-00:15:00 impi ./superPrac2-cuda 2000 0.0001 /dev/null
+sbatch -p gputest -n 9 --ntasks-per-node=2 --time=0-00:15:00 impi ./superPrac2-cuda 2000 0.0001 /dev/null
+sbatch -p gputest -n 10 --ntasks-per-node=2 --time=0-00:15:00 impi ./superPrac2-cuda 2000 0.0001 /dev/null
+sbatch -p gputest -n 11 --ntasks-per-node=2 --time=0-00:15:00 impi ./superPrac2-cuda 2000 0.0001 /dev/null
+sbatch -p gputest -n 12 --ntasks-per-node=2 --time=0-00:15:00 impi ./superPrac2-cuda 2000 0.0001 /dev/null
+sbatch -p gputest -n 13 --ntasks-per-node=2 --time=0-00:15:00 impi ./superPrac2-cuda 2000 0.0001 /dev/null
+sbatch -p gputest -n 14 --ntasks-per-node=2 --time=0-00:15:00 impi ./superPrac2-cuda 2000 0.0001 /dev/null
+sbatch -p gputest -n 15 --ntasks-per-node=2 --time=0-00:15:00 impi ./superPrac2-cuda 2000 0.0001 /dev/null
+sbatch -p gputest -n 16 --ntasks-per-node=2 --time=0-00:15:00 impi ./superPrac2-cuda 2000 0.0001 /dev/null
+
+sbatch -p gputest -n 1 --ntasks-per-node=2 --time=0-00:15:00 impi ./superPrac2-cuda 5000 0.0001 /dev/null
+sbatch -p gputest -n 2 --ntasks-per-node=2 --time=0-00:15:00 impi ./superPrac2-cuda 5000 0.0001 /dev/null
+sbatch -p gputest -n 3 --ntasks-per-node=2 --time=0-00:15:00 impi ./superPrac2-cuda 5000 0.0001 /dev/null
+sbatch -p gputest -n 4 --ntasks-per-node=2 --time=0-00:15:00 impi ./superPrac2-cuda 5000 0.0001 /dev/null
+sbatch -p gputest -n 5 --ntasks-per-node=2 --time=0-00:15:00 impi ./superPrac2-cuda 5000 0.0001 /dev/null
+sbatch -p gputest -n 6 --ntasks-per-node=2 --time=0-00:15:00 impi ./superPrac2-cuda 5000 0.0001 /dev/null
+sbatch -p gputest -n 7 --ntasks-per-node=2 --time=0-00:15:00 impi ./superPrac2-cuda 5000 0.0001 /dev/null
+sbatch -p gputest -n 8 --ntasks-per-node=2 --time=0-00:15:00 impi ./superPrac2-cuda 5000 0.0001 /dev/null
+sbatch -p gputest -n 15 --ntasks-per-node=2 --time=0-00:15:00 impi ./superPrac2-cuda 5000 0.0001 /dev/null
+sbatch -p gputest -n 16 --ntasks-per-node=2 --time=0-00:15:00 impi ./superPrac2-cuda 5000 0.0001 /dev/null
+
+
 
 sbatch -p gputest -n 8 --ntasks-per-node=2 --time=0-00:15:00 impi ./superPrac2-cuda 1000 0.0001 output/lom-out-8-1000 # 00:04 sec
 sbatch -p gputest -n 8 --ntasks-per-node=2 --time=0-00:15:00 impi ./superPrac2-cuda 2000 0.0001 output/lom-out-8-2000 # 00:13 sec
 sbatch -p gputest -n 16 --ntasks-per-node=2 --time=0-00:15:00 impi ./superPrac2-cuda 1000 0.0001 output/lom-out-16-1000 # 00:05 sec
 sbatch -p gputest -n 16 --ntasks-per-node=2 --time=0-00:15:00 impi ./superPrac2-cuda 2000 0.0001 output/lom-out-16-2000 # 00:12 sec
-
-sbatch -p gpu -n 32 --ntasks-per-node=2 --time=0-00:01:00 impi ./superPrac2-cuda 1000 0.0001 output/lom-out-32-1000 # 00:05 sec
-sbatch -p gpu -n 32 --ntasks-per-node=2 --time=0-00:01:00 impi ./superPrac2-cuda 2000 0.0001 output/lom-out-32-2000 # 00:11 sec
-sbatch -p gpu -n 64 --ntasks-per-node=2 --time=0-00:01:00 impi ./superPrac2-cuda 1000 0.0001 output/lom-out-64-1000 #
-sbatch -p gpu -n 64 --ntasks-per-node=2 --time=0-00:01:00 impi ./superPrac2-cuda 2000 0.0001 output/lom-out-64-2000 #
 ```

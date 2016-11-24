@@ -41,8 +41,20 @@ __global__ void cudakernel_Initialize_F_boundary_fi_vertical (double* const f, c
 // ==================================================================================================================================================
 void DHP_PE_RA_FDM::cuda_Initialize_P_and_Pprev (){
 
-    GridDistribute mesh (devProp, procCoords.x_cells_num);
-    
+    // internal region
+    int dimension = (procCoords.x_cells_num) * (procCoords.y_cells_num - static_cast<int>(procCoords.top) - static_cast<int>(procCoords.bottom));
+    GridDistribute mesh (devProp, dimension);
+    cudakernel_MemsetDouble<<<mesh.gridDim, mesh.blockDim, 0, cudaStreams[0]>>>
+        (p_prev + static_cast<int>(procCoords.top) * procCoords.x_cells_num, 0, dimension); CUDA_CHECK_LAST_ERROR;
+
+    // SAFE_CUDA(cudaMemsetAsync(p_prev + j * procCoords.x_cells_num + static_cast<int>(procCoords.left), 1,
+    //     (procCoords.x_cells_num - static_cast<int>(procCoords.right) - static_cast<int>(procCoords.left)) * sizeof(*p_prev),
+    //     cudaStreams[0]));
+    cudaAllStreamsSynchronize(0, 0);
+
+
+    mesh = GridDistribute (devProp, procCoords.x_cells_num);
+
     if (procCoords.top){
 
         cudakernel_Initialize_F_boundary_fi_horizontal<<<mesh.gridDim, mesh.blockDim, 0, cudaStreams[0]>>>
@@ -73,20 +85,7 @@ void DHP_PE_RA_FDM::cuda_Initialize_P_and_Pprev (){
             (p_prev, procCoords, X1, Y1, hx, hy, procCoords.x_cells_num -1); CUDA_CHECK_LAST_ERROR;
     }
 
-    // internal region
-    for (int j = static_cast<int>(procCoords.top); j < procCoords.y_cells_num - static_cast<int>(procCoords.bottom); j++){
-
-        int dimension = procCoords.x_cells_num - static_cast<int>(procCoords.right) - static_cast<int>(procCoords.left);
-        mesh = GridDistribute (devProp, dimension);
-        cudakernel_MemsetDouble<<<mesh.gridDim, mesh.blockDim, 0, cudaStreams[8 + j % 5]>>>
-            (p_prev + j * procCoords.x_cells_num + static_cast<int>(procCoords.left), 0, dimension); CUDA_CHECK_LAST_ERROR;
-
-        // SAFE_CUDA(cudaMemsetAsync(p_prev + j * procCoords.x_cells_num + static_cast<int>(procCoords.left), 1,
-        //     (procCoords.x_cells_num - static_cast<int>(procCoords.right) - static_cast<int>(procCoords.left)) * sizeof(*p_prev),
-        //     cudaStreams[8 + j % 5]));
-    }
-
-    cudaAllStreamsSynchronize(0, 12);
+    cudaAllStreamsSynchronize(0, 7);
 }
 
 

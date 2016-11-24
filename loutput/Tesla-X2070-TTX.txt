@@ -1,0 +1,42 @@
+deviceNum= 2
+videocard-name= Tesla X2070
+cudaVersion= 2.0
+
+multiProcessorCount= 14
+maxThreadsPerMultiProcessor= 1536
+warpSize= 32
+
+maxThreadsPerBlock= 1024
+maxGridSize= 65535 65535 65535
+maxThreadsDim= 1024 1024 64
+
+totalGlobalMem= 5636554752
+totalConstMem= 65536
+sharedMemPerBlock= 49152
+regsPerBlock= 32768
+
+canMapHostMemory= 1
+unifiedAddressing= 1
+computeMode= 0
+asyncEngineCount= 2
+concurrentKernels= 1
+deviceOverlap= 1
+
+clockRate= 1147000
+
+ECCEnabled= 1
+
+integrated= 0
+kernelExecTimeoutEnabled= 0
+
+l2CacheSize= 786432
+
+memoryBusWidth= 384
+memoryClockRate= 1548000
+memPitch= 2147483647
+
+pciBusID= 3
+pciDeviceID= 0
+pciDomainID= 0
+
+surfaceAlignment= 512

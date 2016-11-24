@@ -149,7 +149,7 @@ debug_fname (string("debug.txt"))
 
     // Setting memory mapping
     SAFE_CUDA(cudaSetDeviceFlags(cudaDeviceMapHost));
-    SAFE_CUDA(cudaSetDeviceFlags(cudaDeviceBlockingSync));
+    // SAFE_CUDA(cudaSetDeviceFlags(cudaDeviceBlockingSync));
     SAFE_CUDA(cudaDeviceSetCacheConfig(cudaFuncCachePreferL1));
 
     SAFE_CUDA(cudaSetDevice(cudaDeviceNum));
@@ -303,6 +303,7 @@ void DHP_PE_RA_FDM::Compute (const ProcParams& procParams_in, const int x_proc_n
 
 
     iterations_counter = 0;
+    // while (iterations_counter < 3) {
     while (true) {
         if (debug and procParams.rank == 0)
             cout << endl << "iterations_counter = " << iterations_counter << endl;
