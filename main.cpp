@@ -231,73 +231,8 @@ void GetVideoCardProperties (const string& fout_name){
 // ==================================================================================================================================================
 void ComputeGridFragmentation (const ProcParams& procParams, int& x_proc_num, int& y_proc_num){
 
-    if (procParams.size >= 1024) {
-        x_proc_num = 32;
-        y_proc_num = 32;
-    } else if (procParams.size >= 512) {
-        x_proc_num = 16;
-        y_proc_num = 32;
-    } else if (procParams.size >= 256) {
-        x_proc_num = 16;
-        y_proc_num = 16;
-    } else if (procParams.size >= 128) {
-        x_proc_num = 8;
-        y_proc_num = 16;
-    } else if (procParams.size >= 64) {
-        x_proc_num = 8;
-        y_proc_num = 8;
-    } else if (procParams.size >= 32) {
-        x_proc_num = 4;
-        y_proc_num = 8;
-    } else if (procParams.size >= 16) {
-        x_proc_num = 4;
-        y_proc_num = 4;
-    } else if (procParams.size >= 15){
-        x_proc_num = 3;
-        y_proc_num = 5;
-    } else if (procParams.size >= 14){
-        x_proc_num = 2;
-        y_proc_num = 7;
-    } else if (procParams.size >= 13){
-        x_proc_num = 1;
-        y_proc_num = 13;
-    } else if (procParams.size >= 12){
-        x_proc_num = 3;
-        y_proc_num = 4;
-    } else if (procParams.size >= 11){
-        x_proc_num = 1;
-        y_proc_num = 11;
-    } else if (procParams.size >= 10){
-        x_proc_num = 2;
-        y_proc_num = 5;
-    } else if (procParams.size >= 9){
-        x_proc_num = 3;
-        y_proc_num = 3;
-    } else if (procParams.size >= 8){
-        x_proc_num = 2;
-        y_proc_num = 4;
-    } else if (procParams.size >= 7) {
-        x_proc_num = 1;
-        y_proc_num = 7;
-    } else if (procParams.size >= 6) {
-        x_proc_num = 2;
-        y_proc_num = 3;
-    } else if (procParams.size >= 5) {
-        x_proc_num = 1;
-        y_proc_num = 5;
-    } else if (procParams.size >= 4) {
-        x_proc_num = 2;
-        y_proc_num = 2;
-    } else if (procParams.size >= 3) {
-        x_proc_num = 1;
-        y_proc_num = 3;
-    } else if (procParams.size >= 2) {
-        x_proc_num = 1;
-        y_proc_num = 2;
-    } else if (procParams.size >= 1) {
-        x_proc_num = 1;
-        y_proc_num = 1;
-    } else {
-        throw DHP_PE_RA_FDM_Exception("Wrong process amount given for computations");
-    }
+    x_proc_num = std::ceil(std::sqrt(procParams.size));
+    for (; procParams.size % x_proc_num != 0; x_proc_num--)
+        ;
+    y_proc_num = procParams.size / x_proc_num;
 }
