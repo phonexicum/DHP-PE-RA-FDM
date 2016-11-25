@@ -35,7 +35,7 @@ lmount:
 
 
 jcompile:
-	mpicxx main.cpp DHP_PE_RA_FDM.cpp DHP_PE_RA_FDM.h -o superPrac2 -std=gnu++98 -Wall -Wno-unknown-pragmas -O3
+	mpixlcxx main.cpp DHP_PE_RA_FDM.cpp -o superPrac2 -O3
 
 jcompile-omp:
 	mpixlcxx_r main.cpp DHP_PE_RA_FDM.cpp -o superPrac2-omp -qsmp=omp -O3

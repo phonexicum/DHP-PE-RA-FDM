@@ -188,40 +188,8 @@ void DHP_PE_RA_FDM_superprac::Print_p (const string& dout_name) const{
 // ==================================================================================================================================================
 void ComputeGridFragmentation (const ProcParams& procParams, int& x_proc_num, int& y_proc_num){
 
-    if (procParams.size >= 1024) {
-        x_proc_num = 32;
-        y_proc_num = 32;
-    } else if (procParams.size >= 512) {
-        x_proc_num = 16;
-        y_proc_num = 32;
-    } else if (procParams.size >= 256) {
-        x_proc_num = 16;
-        y_proc_num = 16;
-    } else if (procParams.size >= 128) {
-        x_proc_num = 8;
-        y_proc_num = 16;
-    } else if (procParams.size >= 64) {
-        x_proc_num = 8;
-        y_proc_num = 8;
-    } else if (procParams.size >= 32) {
-        x_proc_num = 4;
-        y_proc_num = 8;
-    } else if (procParams.size >= 16) {
-        x_proc_num = 4;
-        y_proc_num = 4;
-    } else if (procParams.size >= 8){
-        x_proc_num = 2;
-        y_proc_num = 4;
-    } else if (procParams.size >= 4) {
-        x_proc_num = 2;
-        y_proc_num = 2;
-    } else if (procParams.size >= 2) {
-        x_proc_num = 1;
-        y_proc_num = 2;
-    } else if (procParams.size >= 1) {
-        x_proc_num = 1;
-        y_proc_num = 1;
-    } else {
-        throw DHP_PE_RA_FDM_Exception("Wrong process amount given for computations");
-    }
+    x_proc_num = std::ceil(std::sqrt(procParams.size));
+    for (; procParams.size % x_proc_num != 0; x_proc_num--)
+        ;
+    y_proc_num = procParams.size / x_proc_num;
 }
